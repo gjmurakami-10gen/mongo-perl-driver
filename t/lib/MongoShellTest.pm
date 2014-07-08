@@ -21,7 +21,6 @@ use IO::Socket;
 use Data::Dumper;
 use List::Flatten;
 use IO::String;
-tie *IO, 'IO::String';
 
 use constant {
     MONGO_SHELL             => '../mongo/mongo',
@@ -134,6 +133,91 @@ sub sh {
          print $out $_;
          print $out $self->x($_);
      }
+};
+
+package MongoDB::ReplSetTest;
+
+use Moo;
+use IO::Socket;
+use Data::Dumper;
+use List::Flatten;
+use IO::String;
+use JSON;
+
+use constant {
+    PROMPT                  => qr/>\ /m,
+};
+
+has ms => (
+    is      => 'rw',
+    default => undef,
+);
+
+has var => (
+    is      => 'rw',
+    default => 'rs',
+);
+
+sub BUILD {
+   my ($self) = @_;
+};
+
+sub x_s {
+    my ($self, $s, $prompt) = @_;
+    $prompt ||= PROMPT;
+    return $self->ms->x_s($s, $prompt);
+};
+
+sub sh {
+    my ($self, $s, $out) = @_;
+    $self->ms->sh($s, $out);
+};
+
+sub start {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $opts = {
+        'var' => 'rs',
+        'name' => 'test',
+        'nodes' => 3,
+        'startPort' => 31000
+    };
+    my $sio = IO::String->new;
+    my $json_opts = encode_json $opts;
+    $self->sh("var $var = new ReplSetTest( $json_opts );", $sio);
+    $self->sh("$var.startSet();", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest Starting/;
+    $self->sh("$var.initiate();", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /Config now saved locally.  Should come online in about a minute./;
+    $self->sh("$var.awaitReplication();", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest awaitReplication: finished: all/;
+    return ${$sio->string_ref};
+};
+
+sub stop {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $sio = IO::String->new;
+    $self->sh("$var.stopSet();", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/;
+    return ${$sio->string_ref};
+};
+
+sub restart {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $sio = IO::String->new;
+    $self->sh("$var.restartSet();", $sio);
+    $self->sh("$var.awaitSecondaryNodes(30000);", $sio);
+    $self->sh("$var.awaitReplication(30000);", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest awaitReplication: finished: all/;
+    return ${$sio->string_ref};
+};
+
+sub status {
+    my ($self) = @_;
+    my $var = $self->var;
+    return $self->x_s("$var.status();");
 };
 
 1;

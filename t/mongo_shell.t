@@ -30,22 +30,23 @@ use lib "t/lib";
 use MongoShellTest;
 use Data::Dumper;
 use IO::String;
-tie *IO, 'IO::String';
+use JSON;
 
 subtest "mongo shell" => sub {
+
     my $ms = MongoDB::Shell->new;
-    my $result = $ms->x_s("1+1;");
-    print "result: $result\n";
-    is("2", $result);
-    $ms->sh("2+2;");
-    my $sio = IO::String->new;
-    $sio->print("Hello sio\n");
-    my $line;
-    read($sio, $line, 100);
-    #$line = <$sio>;
-    print "line: $line\n";
-    $ms->sh("4+4;", $sio);
+
+    my $rs = MongoDB::ReplSetTest->new(ms => $ms);
+    my $output;
+    $output = $rs->start;
+    $output = $rs->status;
+    print "output: $output\n";
+    $output = $rs->restart;
+    $output = $rs->stop;
+
     $ms->stop;
+
+    is(1, 1);
 };
 
 done_testing;
