@@ -14,6 +14,19 @@
 #  limitations under the License.
 #
 
+use strict;
+use warnings;
+
+package MongoDB::TestUtils;
+
+use String::Util 'trim';
+
+sub parse_psuedo_array {
+    my ($s) = @_;
+    $s =~ s/^\[(.*)\]$/$1/sm;
+    return map { trim $_ } split(/,/, $s);
+};
+
 package MongoDB::Shell;
 
 use Moo;
@@ -21,6 +34,7 @@ use Types::Standard -types;
 use IO::Socket;
 use List::Flatten;
 use IO::String;
+use JSON;
 
 use constant {
     MONGO_SHELL => '../mongo/mongo',
@@ -29,7 +43,7 @@ use constant {
     MONGO_TEST_FRAMEWORK_JS => 'devel/cluster_test.js',
     MONGO_LOG => 'mongo_shell.log',
     RETRIES => 10,
-    PROMPT => qr/>\ /m,
+    PROMPT => '> ',
     BYE => qr/^bye\n$/m,
 };
 
@@ -93,7 +107,7 @@ sub read {
     do {
         $self->sock->recv($buffer, 1024);
         push(@result, $buffer);
-    } until (!$buffer || $buffer =~ $prompt);
+    } until (!$buffer || $buffer =~ /$prompt/m);
     return join('', @result);
 };
 
@@ -124,9 +138,15 @@ sub x_s {
     my ($self, $s, $prompt) = @_;
     $prompt ||= PROMPT;
     my $result = $self->x($s, $prompt);
-    $result =~ s/$prompt//;
+    $result =~ s/$prompt$//m;
     chomp($result);
     return $result;
+};
+
+sub x_json {
+    my ($self, $s, $prompt) = @_;
+    $prompt ||= PROMPT;
+    return decode_json($self->x_s($s, $prompt));
 };
 
 sub sh {
@@ -212,6 +232,12 @@ sub x_s {
     return $self->ms->x_s($s, $prompt);
 };
 
+sub x_json {
+    my ($self, $s, $prompt) = @_;
+    $prompt ||= MongoDB::Shell::PROMPT;
+    return $self->ms->x_json($s, $prompt);
+};
+
 sub sh {
     my ($self, $s, $out) = @_;
     $self->ms->sh($s, $out);
@@ -227,9 +253,9 @@ package MongoDB::ReplSetTest;
 
 use Moo;
 use Types::Standard -types;
-use Data::Dumper;
 use IO::String;
 use JSON;
+use Data::Dumper;
 
 extends 'MongoDB::ClusterTest';
 
@@ -270,7 +296,6 @@ sub start {
         'startPort' => $self->startPort,
     };
     my $json_opts = encode_json $opts;
-    print "json_opts: $json_opts\n";
     $self->sh("var $var = new ReplSetTest( $json_opts );", $sio);
     $self->sh("$var.startSet();", $sio);
     die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest Starting/;
@@ -307,10 +332,28 @@ sub status {
     return $self->x_s("$var.status();");
 };
 
+sub get_nodes {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $nodes = $self->x_json("$var.nodes;");
+    print "get_nodes nodes:\n";
+    print Dumper($nodes);
+    return map {  MongoDB::Node->new(cluster => $self, conn => $_) } @$nodes;
+};
+
 sub primary {
     my ($self) = @_;
     my $var = $self->var;
-    return MongoDB::Node->new(cluster => $self, conn => $self->x_s("$var.getPrimary();"));
+    my $primary = $self->x_s("$var.getPrimary();");
+    $primary =~ s/^"(.*)"$/$1/sm;
+    return MongoDB::Node->new(cluster => $self, conn => $primary);
+};
+
+sub secondaries {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $secondaries = $self->x_json("$var.getSecondaries();");
+    return map {  MongoDB::Node->new(cluster => $self, conn => $_) } @$secondaries;
 };
 
 1;

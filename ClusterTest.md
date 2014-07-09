@@ -1,6 +1,6 @@
 # Mongo Shell Cluster Testing Notes
 
-    cpan IO::String List::Flatten String::Util
+    cpan Devel::Cover IO::String List::Flatten String::Util Types::Standard
     
 ## mongo shell test framework essentials
 
