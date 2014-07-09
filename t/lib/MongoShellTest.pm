@@ -20,11 +20,24 @@ use warnings;
 package MongoDB::TestUtils;
 
 use String::Util 'trim';
+use Data::Dumper;
 
 sub parse_psuedo_array {
     my ($s) = @_;
     $s =~ s/^\[(.*)\]$/$1/sm;
     return map { trim $_ } split(/,/, $s);
+};
+
+sub ensure_cluster {
+    my (%args) = @_;
+    if  ($args{kind} eq 'rs') {
+        my $rs = MongoDB::ReplSetTest->new(ms => $args{ms});
+        return $rs->ensure_cluster;
+    }
+    elsif ($args{kind} eq 'sc') {
+        die;
+    }
+    return undef;
 };
 
 package MongoDB::Shell;
@@ -336,8 +349,6 @@ sub get_nodes {
     my ($self) = @_;
     my $var = $self->var;
     my $nodes = $self->x_json("$var.nodes;");
-    print "get_nodes nodes:\n";
-    print Dumper($nodes);
     return map {  MongoDB::Node->new(cluster => $self, conn => $_) } @$nodes;
 };
 
@@ -356,4 +367,15 @@ sub secondaries {
     return map {  MongoDB::Node->new(cluster => $self, conn => $_) } @$secondaries;
 };
 
+sub ensure_cluster {
+    my ($self) = @_;
+    if ($self->exists) {
+        $self->restart;
+    }
+    else {
+        #FileUtils.mkdir_p(@opts[:dataPath])
+        $self->start;
+    }
+    return $self;
+};
 1;
