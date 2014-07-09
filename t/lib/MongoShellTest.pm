@@ -17,37 +17,43 @@
 package MongoDB::Shell;
 
 use Moo;
+use Types::Standard -types;
 use IO::Socket;
-use Data::Dumper;
 use List::Flatten;
 use IO::String;
 
 use constant {
-    MONGO_SHELL             => '../mongo/mongo',
-    MONGO_SHELL_ARGS        => ['--nodb', '--shell', '--listen'],
-    MONGO_PORT              => 30001,
+    MONGO_SHELL => '../mongo/mongo',
+    MONGO_SHELL_ARGS => ['--nodb', '--shell', '--listen'],
+    MONGO_PORT => 30001,
     MONGO_TEST_FRAMEWORK_JS => 'devel/cluster_test.js',
-    PROMPT                  => qr/>\ /m,
-    BYE                     => qr/^bye\n$/m,
+    MONGO_LOG => 'mongo_shell.log',
+    RETRIES => 10,
+    PROMPT => qr/>\ /m,
+    BYE => qr/^bye\n$/m,
 };
 
-open(my $MONGO_LOG, '>', 'mongo_shell.log');
+open(my $MONGO_LOG, '>', MONGO_LOG);
 
 $SIG{CHLD} = 'IGNORE';
 
 has port => (
-    is      => 'rw',
+    is => 'rw',
+    isa => Num,
     default => MONGO_PORT,
+    coerce => sub { $_[0] + 0 },
 );
 
 has pid => (
-    is      => 'rw',
+    is => 'rwp',
+    isa => Num,
     default => -1,
 );
 
 has sock => (
-    is      => 'rw',
-    default => -1,
+    is => 'rwp',
+    #isa => InstanceOf['IO::Socket::INET'],
+    default => undef,
 );
 
 sub BUILD {
@@ -58,7 +64,7 @@ sub BUILD {
 
 sub spawn {
     my ($self) = @_;
-    unless ($self->pid( fork )) {
+    unless ($self->_set_pid( fork )) {
         open STDOUT, '>&', $MONGO_LOG;
         open STDERR, '>&', $MONGO_LOG;
         my $mongo_shell = $ENV{'MONGO_SHELL'} || MONGO_SHELL;
@@ -70,14 +76,13 @@ sub spawn {
 
 sub connect {
     my ($self) = @_;
-    my $retries = 10;
-    for (my $i = 0; $i < $retries; $i++) {
-        $self->sock( IO::Socket::INET->new("localhost:30001") );
+    for (my $i = 0; $i < RETRIES; $i++) {
+        $self->_set_sock( IO::Socket::INET->new("localhost:30001") );
         return if defined $self->sock;
         $self->spawn;
         sleep(1);
     }
-    die "Error on connect to mongo shell after $retries retries\n";
+    die "Error on connect to mongo shell after @{[RETRIES]} retries\n";
 };
 
 sub read {
@@ -135,36 +140,75 @@ sub sh {
      }
 };
 
-package MongoDB::ReplSetTest;
+package MongoDB::Node;
 
 use Moo;
-use IO::Socket;
-use Data::Dumper;
-use List::Flatten;
-use IO::String;
-use JSON;
+use Types::Standard -types;
 
-use constant {
-    PROMPT                  => qr/>\ /m,
-};
+has cluster => (
+    is => 'rw',
+    isa => InstanceOf['MongoDB::ClusterTest'],
+    required => 1,
+);
 
-has ms => (
-    is      => 'rw',
-    default => undef,
+has conn => (
+    is => 'rw',
+    isa => Str,
+    required => 1,
 );
 
 has var => (
-    is      => 'rw',
-    default => 'rs',
+    is => 'rwp',
+    isa => Str,
+);
+
+has host_port => (
+    is => 'rwp',
+    isa => Str,
+);
+
+has host => (
+    is => 'rwp',
+    isa => Str,
+);
+
+has port => (
+    is => 'rwp',
+    isa => Num,
+    coerce => sub { $_[0] + 0 },
 );
 
 sub BUILD {
-   my ($self) = @_;
+    my ($self) = @_;
+    $self->_set_var($self->cluster->var);
+    my $host_port = $self->conn;
+    $host_port =~ s/connection to //;
+    $self->_set_host_port($host_port);
+    my ($host, $port) = split(/:/, $host_port);
+    $self->_set_host($host);
+    $self->_set_port($port);
 };
+
+package MongoDB::ClusterTest;
+
+use Moo;
+use Types::Standard -types;
+
+has ms => (
+    is => 'rw',
+    isa => InstanceOf['MongoDB::Shell'],
+    required => 1,
+);
+
+has var => (
+    is => 'rw',
+    isa => Str,
+    default => 'ct',
+);
 
 sub x_s {
     my ($self, $s, $prompt) = @_;
-    $prompt ||= PROMPT;
+    $prompt ||= MongoDB::Shell::PROMPT;
     return $self->ms->x_s($s, $prompt);
 };
 
@@ -173,17 +217,60 @@ sub sh {
     $self->ms->sh($s, $out);
 };
 
-sub start {
+sub exists {
     my ($self) = @_;
     my $var = $self->var;
-    my $opts = {
-        'var' => 'rs',
-        'name' => 'test',
-        'nodes' => 3,
-        'startPort' => 31000
-    };
+    return $self->x_s("typeof $var;") eq "object";
+};
+
+package MongoDB::ReplSetTest;
+
+use Moo;
+use Types::Standard -types;
+use Data::Dumper;
+use IO::String;
+use JSON;
+
+extends 'MongoDB::ClusterTest';
+
+has var => (
+    is => 'rw',
+    isa => Str,
+    default => 'rs',
+);
+
+has name => (
+    is => 'rw',
+    isa => Str,
+    default => 'test',
+);
+
+has nodes => (
+    is => 'rw',
+    isa => Num,
+    default => 3,
+    coerce => sub { $_[0] + 0 },
+);
+
+has startPort => (
+    is => 'rw',
+    isa => Num,
+    default => 31000,
+    coerce => sub { $_[0] + 0 },
+);
+
+sub start {
+    my ($self) = @_;
     my $sio = IO::String->new;
+    my $var = $self->var;
+    my $opts = {
+        'var' => $self->var,
+        'name' => $self->name,
+        'nodes' => $self->nodes,
+        'startPort' => $self->startPort,
+    };
     my $json_opts = encode_json $opts;
+    print "json_opts: $json_opts\n";
     $self->sh("var $var = new ReplSetTest( $json_opts );", $sio);
     $self->sh("$var.startSet();", $sio);
     die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest Starting/;
@@ -218,6 +305,12 @@ sub status {
     my ($self) = @_;
     my $var = $self->var;
     return $self->x_s("$var.status();");
+};
+
+sub primary {
+    my ($self) = @_;
+    my $var = $self->var;
+    return MongoDB::Node->new(cluster => $self, conn => $self->x_s("$var.getPrimary();"));
 };
 
 1;

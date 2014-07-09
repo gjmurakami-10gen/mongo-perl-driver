@@ -1,5 +1,7 @@
 # Mongo Shell Cluster Testing Notes
 
+    cpan IO::String List::Flatten String::Util
+    
 ## mongo shell test framework essentials
 
 - based on mongo shell ReplSetTest and ShardingTest objects
