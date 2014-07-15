@@ -23,7 +23,7 @@ use Test::Warn;
 
 use MongoDB;
 
-use lib "t/lib";
+use lib "devel/lib";
 #use MongoDBTest '$testdb', '$conn', '$server_type';
 
 use MongoShellTest;
@@ -31,10 +31,10 @@ use Data::Dumper;
 use IO::String;
 use JSON;
 
-my $ms = MongoDB::Shell->new;
+my $ms = MongoDBTest::Shell->new;
 
 subtest "rs attributes"=> sub {
-    my $rs = MongoDB::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
+    my $rs = MongoDBTest::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
 
     is($rs->exists, 1);
     is($rs->nodes, 3);
@@ -42,7 +42,7 @@ subtest "rs attributes"=> sub {
 };
 
 subtest "rs methods" => sub {
-    my $rs = MongoDB::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
+    my $rs = MongoDBTest::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
 
     is($rs->exists, 1);
 
@@ -61,10 +61,14 @@ subtest "rs methods" => sub {
 
     print "secondaries:\n";
     print Dumper($rs->secondaries);
+
+    my $seeds = $rs->seeds;
+    print "seeds: $seeds\n";
+    is(split(',', $seeds), 3);
 };
 
 subtest "rs restart" => sub {
-    my $rs = MongoDB::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
+    my $rs = MongoDBTest::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
 
     is($rs->exists, 1);
     my $restart = $rs->restart;
@@ -72,6 +76,11 @@ subtest "rs restart" => sub {
 };
 
 done_testing;
+
+print "stopping cluster...\n";
+my $rs = MongoDBTest::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
+$rs->stop;
+print "cluster stopped.\n";
 
 print "stopping mongo shell...\n";
 $ms->stop;

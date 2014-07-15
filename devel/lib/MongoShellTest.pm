@@ -17,7 +17,7 @@
 use strict;
 use warnings;
 
-package MongoDB::TestUtils;
+package MongoDBTest::TestUtils;
 
 use String::Util 'trim';
 use Data::Dumper;
@@ -31,7 +31,7 @@ sub parse_psuedo_array {
 sub ensure_cluster {
     my (%args) = @_;
     if  ($args{kind} eq 'rs') {
-        my $rs = MongoDB::ReplSetTest->new(ms => $args{ms});
+        my $rs = MongoDBTest::ReplSetTest->new(ms => $args{ms});
         return $rs->ensure_cluster;
     }
     elsif ($args{kind} eq 'sc') {
@@ -40,7 +40,7 @@ sub ensure_cluster {
     return undef;
 };
 
-package MongoDB::Shell;
+package MongoDBTest::Shell;
 
 use Moo;
 use Types::Standard -types;
@@ -94,6 +94,7 @@ sub spawn {
     unless ($self->_set_pid( fork )) {
         open STDOUT, '>&', $MONGO_LOG;
         open STDERR, '>&', $MONGO_LOG;
+        setpgrp;
         my $mongo_shell = $ENV{'MONGO_SHELL'} || MONGO_SHELL;
         my @argv = flat($mongo_shell, MONGO_SHELL_ARGS, $self->port, MONGO_TEST_FRAMEWORK_JS);
         exec(@argv);
@@ -173,14 +174,14 @@ sub sh {
      }
 };
 
-package MongoDB::Node;
+package MongoDBTest::Node;
 
 use Moo;
 use Types::Standard -types;
 
 has cluster => (
     is => 'rw',
-    isa => InstanceOf['MongoDB::ClusterTest'],
+    isa => InstanceOf['MongoDBTest::ClusterTest'],
     required => 1,
 );
 
@@ -222,14 +223,14 @@ sub BUILD {
     $self->_set_port($port);
 };
 
-package MongoDB::ClusterTest;
+package MongoDBTest::ClusterTest;
 
 use Moo;
 use Types::Standard -types;
 
 has ms => (
     is => 'rw',
-    isa => InstanceOf['MongoDB::Shell'],
+    isa => InstanceOf['MongoDBTest::Shell'],
     required => 1,
 );
 
@@ -241,13 +242,13 @@ has var => (
 
 sub x_s {
     my ($self, $s, $prompt) = @_;
-    $prompt ||= MongoDB::Shell::PROMPT;
+    $prompt ||= MongoDBTest::Shell::PROMPT;
     return $self->ms->x_s($s, $prompt);
 };
 
 sub x_json {
     my ($self, $s, $prompt) = @_;
-    $prompt ||= MongoDB::Shell::PROMPT;
+    $prompt ||= MongoDBTest::Shell::PROMPT;
     return $self->ms->x_json($s, $prompt);
 };
 
@@ -262,7 +263,7 @@ sub exists {
     return $self->x_s("typeof $var;") eq "object";
 };
 
-package MongoDB::ReplSetTest;
+package MongoDBTest::ReplSetTest;
 
 use Moo;
 use Types::Standard -types;
@@ -270,7 +271,7 @@ use IO::String;
 use JSON;
 use Data::Dumper;
 
-extends 'MongoDB::ClusterTest';
+extends 'MongoDBTest::ClusterTest';
 
 has var => (
     is => 'rw',
@@ -349,7 +350,7 @@ sub get_nodes {
     my ($self) = @_;
     my $var = $self->var;
     my $nodes = $self->x_json("$var.nodes;");
-    return map {  MongoDB::Node->new(cluster => $self, conn => $_) } @$nodes;
+    return map { MongoDBTest::Node->new(cluster => $self, conn => $_) } @$nodes;
 };
 
 sub primary {
@@ -357,14 +358,19 @@ sub primary {
     my $var = $self->var;
     my $primary = $self->x_s("$var.getPrimary();");
     $primary =~ s/^"(.*)"$/$1/sm;
-    return MongoDB::Node->new(cluster => $self, conn => $primary);
+    return MongoDBTest::Node->new(cluster => $self, conn => $primary);
 };
 
 sub secondaries {
     my ($self) = @_;
     my $var = $self->var;
     my $secondaries = $self->x_json("$var.getSecondaries();");
-    return map {  MongoDB::Node->new(cluster => $self, conn => $_) } @$secondaries;
+    return map { MongoDBTest::Node->new(cluster => $self, conn => $_) } @$secondaries;
+};
+
+sub seeds {
+    my ($self) = @_;
+    return join(',', map { $_->host_port } $self->get_nodes);
 };
 
 sub ensure_cluster {
@@ -378,4 +384,5 @@ sub ensure_cluster {
     }
     return $self;
 };
+
 1;

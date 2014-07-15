@@ -1,7 +1,21 @@
 # Mongo Shell Cluster Testing Notes
 
-    cpan Devel::Cover IO::String List::Flatten String::Util Types::Standard
-    
+Running all regular test files under a specific configuration:
+
+    ./devel/bin/harness.pl devel/clusters/sharded-2.6.yml -- make test
+
+CPAN modules for harness.pl
+
+    cpan MooseX::Role::Logger Types::Path::Tiny Proc::Guard Net::EmptyPort Version::Next YAML::XS Log::Any::Adapter    
+
+CPAN modules for MongoShellTest
+
+    cpan Devel::Cover IO::Socket IO::String List::Flatten String::Util Types::Standard
+
+MongoShellTest version
+
+    devel/bin/harness-ms.pl devel/clusters/replicaset-2.6.yml make test
+
 ## mongo shell test framework essentials
 
 - based on mongo shell ReplSetTest and ShardingTest objects
