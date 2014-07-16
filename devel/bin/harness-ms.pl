@@ -21,7 +21,6 @@ use warnings;
 use if -d 'blib', 'blib';
 
 use lib 'devel/lib';
-#use MongoDBTest::Orchestrator;
 use MongoShellTest;
 
 use Getopt::Long;
@@ -56,19 +55,15 @@ if ( ! -f $config_file ) {
 
 say "Creating a cluster from $config_file";
 
-#my $orc = MongoDBTest::Orchestrator->new( config_file => $config_file );
 my $orc = MongoDBTest::ShellOrchestrator->new( config_file => $config_file );
 print Dumper($orc->config);
 $orc->server_set->ensure_cluster;
 
-#$ENV{MONGOD} = $orc->as_uri;
-$ENV{MONGOD} = "mongodb://" . $orc->server_set->seeds;
+$ENV{MONGOD} = $orc->server_set->as_uri;
 say "MONGOD=".$ENV{MONGOD};
 
 say "@command";
 system(@command);
-
-#$orc->stop;
 
 exit;
 

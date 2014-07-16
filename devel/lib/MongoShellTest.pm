@@ -371,9 +371,9 @@ sub secondaries {
     return map { MongoDBTest::Node->new(cluster => $self, conn => $_) } @$secondaries;
 };
 
-sub seeds {
+sub as_uri {
     my ($self) = @_;
-    return join(',', map { $_->host_port } $self->get_nodes);
+    return "mongodb://" . join(',', map { $_->host_port } $self->get_nodes);
 };
 
 sub ensure_cluster {
@@ -395,6 +395,7 @@ use Types::Standard -types;
 use Carp;
 use YAML::XS;
 use Types::Path::Tiny qw/AbsFile/;
+use Data::Dumper;
 
 # Optional
 
@@ -463,12 +464,11 @@ sub BUILD {
 
 sub DEMOLISH {
     my ($self) = @_;
-    print "stopping cluster...\n";
-    $self->server_set->stop;
-    print "cluster stopped.\n";
-    print "stopping mongo shell...\n";
-    $self->ms->stop;
-    print "end of mongo_shell.t\n";
+    my $mongo_shutdown = $ENV{MONGO_SHUTDOWN};
+    if (!defined($mongo_shutdown) || $mongo_shutdown !~ /^(0|false|)$/i) {
+        $self->server_set->stop;
+        $self->ms->stop;
+    }
 }
 
 1;
