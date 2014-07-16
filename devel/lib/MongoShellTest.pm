@@ -20,7 +20,6 @@ use warnings;
 package MongoDBTest::TestUtils;
 
 use String::Util 'trim';
-use Data::Dumper;
 
 sub parse_psuedo_array {
     my ($s) = @_;
@@ -269,7 +268,6 @@ use Moo;
 use Types::Standard -types;
 use IO::String;
 use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::ClusterTest';
 
@@ -384,5 +382,88 @@ sub ensure_cluster {
     }
     return $self;
 };
+
+package MongoDBTest::ShellOrchestrator;
+
+use Moo;
+use Types::Standard -types;
+use Carp;
+use YAML::XS;
+use Types::Path::Tiny qw/AbsFile/;
+
+# Optional
+
+has ms => (
+    is => 'rw',
+    isa => InstanceOf['MongoDBTest::Shell'],
+);
+
+has config_file => (
+    is => 'ro',
+    isa => Str,
+    default => '',
+);
+
+# Lazy or default
+
+has config => (
+    is => 'lazy',
+    isa => HashRef,
+);
+
+sub _build_config {
+    my ($self) = @_;
+    my $config_file = $self->config_file;
+    Carp::croak( sprintf( "no readable config file '%s' found", $self->config_file) )
+        unless -r $self->config_file;
+    my ($config) = YAML::XS::LoadFile($self->config_file);
+    return $config;
+}
+
+has server_set => (
+    is => 'lazy',
+    isa => ConsumerOf['MongoDBTest::ClusterTest'],
+    #handles => [qw/start stop as_uri as_pairs get_server all_servers/]
+);
+
+has type => (
+    is => 'lazy',
+    isa => Enum[qw/single replica sharded/],
+);
+
+sub _build_type {
+    my ($self) = @_;
+    $self->config->{type};
+}
+
+sub is_replica {
+    my ($self) = @_;
+    return $self->type eq 'replica';
+}
+
+sub _build_server_set {
+    my ($self) = @_;
+
+    my $class =  "MongoDBTest::" . ($self->is_replica ? "ReplSetTest" : "ShardingTest");
+    return $class->new(
+        ms => $self->ms,
+        kind => 'rs',
+    );
+}
+
+sub BUILD {
+    my ($self) = @_;
+    $self->ms(MongoDBTest::Shell->new);
+}
+
+sub DEMOLISH {
+    my ($self) = @_;
+    print "stopping cluster...\n";
+    $self->server_set->stop;
+    print "cluster stopped.\n";
+    print "stopping mongo shell...\n";
+    $self->ms->stop;
+    print "end of mongo_shell.t\n";
+}
 
 1;

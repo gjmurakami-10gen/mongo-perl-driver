@@ -14,7 +14,7 @@ CPAN modules for MongoShellTest
 
 MongoShellTest version
 
-    devel/bin/harness-ms.pl devel/clusters/replicaset-2.6.yml make test
+    ./devel/bin/harness-ms.pl devel/clusters/replicaset-2.6.yml make test
 
 ## mongo shell test framework essentials
 

@@ -26,6 +26,7 @@ use MongoShellTest;
 
 use Getopt::Long;
 use Log::Any::Adapter 'Null';
+use Data::Dumper;
 
 my %opts;
 GetOptions(
@@ -56,25 +57,18 @@ if ( ! -f $config_file ) {
 say "Creating a cluster from $config_file";
 
 #my $orc = MongoDBTest::Orchestrator->new( config_file => $config_file );
-
-#$orc->start;
-my $ms = MongoDBTest::Shell->new;
-my $rs = MongoDBTest::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
+my $orc = MongoDBTest::ShellOrchestrator->new( config_file => $config_file );
+print Dumper($orc->config);
+$orc->server_set->ensure_cluster;
 
 #$ENV{MONGOD} = $orc->as_uri;
-$ENV{MONGOD} = "mongodb://" . $rs->seeds;
+$ENV{MONGOD} = "mongodb://" . $orc->server_set->seeds;
 say "MONGOD=".$ENV{MONGOD};
 
 say "@command";
 system(@command);
 
 #$orc->stop;
-print "stopping cluster...\n";
-$rs->stop;
-print "cluster stopped.\n";
-print "stopping mongo shell...\n";
-$ms->stop;
-print "end of mongo_shell.t\n";
 
 exit;
 
