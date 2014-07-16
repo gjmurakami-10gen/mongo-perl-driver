@@ -47,6 +47,7 @@ use IO::Socket;
 use List::Flatten;
 use IO::String;
 use JSON;
+use POSIX 'setsid';
 
 use constant {
     MONGO_SHELL => '../mongo/mongo',
@@ -93,10 +94,14 @@ sub spawn {
     unless ($self->_set_pid( fork )) {
         open STDOUT, '>&', $MONGO_LOG;
         open STDERR, '>&', $MONGO_LOG;
-        setpgrp;
-        my $mongo_shell = $ENV{'MONGO_SHELL'} || MONGO_SHELL;
-        my @argv = flat($mongo_shell, MONGO_SHELL_ARGS, $self->port, MONGO_TEST_FRAMEWORK_JS);
-        exec(@argv);
+        open STDIN, '</dev/null';
+        setsid;
+        unless ($self->_set_pid( fork )) {
+            my $mongo_shell = $ENV{'MONGO_SHELL'} || MONGO_SHELL;
+            my @argv = flat($mongo_shell, MONGO_SHELL_ARGS, $self->port, MONGO_TEST_FRAMEWORK_JS);
+            exec(@argv);
+            exit(0);
+        }
         exit(0);
     }
 };

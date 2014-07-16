@@ -16,6 +16,10 @@ MongoShellTest version
 
     ./devel/bin/harness-ms.pl devel/clusters/replicaset-2.6.yml make test
 
+MONGOPATH
+
+    export MONGOPATH=$(ruby -e 'puts Dir["#{ENV["HOME"]}/10gen/mongodb-*/bin"].reverse.join(":")')
+
 ## mongo shell test framework essentials
 
 - based on mongo shell ReplSetTest and ShardingTest objects
