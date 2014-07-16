@@ -34,7 +34,8 @@ sub ensure_cluster {
         return $rs->ensure_cluster;
     }
     elsif ($args{kind} eq 'sc') {
-        die;
+        my $sc = MongoDBTest::ShardingTest->new(ms => $args{ms});
+        return $sc->ensure_cluster;
     }
     return undef;
 };
@@ -244,6 +245,12 @@ has var => (
     default => 'ct',
 );
 
+has kind => (
+    is => 'rw',
+    isa => Str,
+    default => 'ct',
+);
+
 sub x_s {
     my ($self, $s, $prompt) = @_;
     $prompt ||= MongoDBTest::Shell::PROMPT;
@@ -267,6 +274,18 @@ sub exists {
     return $self->x_s("typeof $var;") eq "object";
 };
 
+sub ensure_cluster {
+    my ($self) = @_;
+    if ($self->exists) {
+        $self->restart;
+    }
+    else {
+        #FileUtils.mkdir_p(@opts[:dataPath])
+        $self->start;
+    }
+    return $self;
+};
+
 package MongoDBTest::ReplSetTest;
 
 use Moo;
@@ -288,6 +307,12 @@ has name => (
     default => 'test',
 );
 
+has kind => (
+    is => 'rw',
+    isa => Str,
+    default => 'rs',
+);
+
 has nodes => (
     is => 'rw',
     isa => Num,
@@ -301,6 +326,12 @@ has startPort => (
     default => 31000,
     coerce => sub { $_[0] + 0 },
 );
+
+sub BUILD {
+    my ($self) = @_;
+    print "ReplSetTest::BUILD\n";
+    print Dumper($self);
+}
 
 sub start {
     my ($self) = @_;
@@ -376,16 +407,110 @@ sub as_uri {
     return "mongodb://" . join(',', map { $_->host_port } $self->get_nodes);
 };
 
-sub ensure_cluster {
+package MongoDBTest::ShardingTest;
+
+use Moo;
+use Types::Standard -types;
+use IO::String;
+use JSON;
+use Data::Dumper;
+
+extends 'MongoDBTest::ClusterTest';
+
+has var => (
+    is => 'rw',
+    isa => Str,
+    default => 'sc',
+);
+
+has name => (
+    is => 'rw',
+    isa => Str,
+    default => 'test',
+);
+
+has kind => (
+    is => 'rw',
+    isa => Str,
+    default => 'sc',
+);
+
+has shards => (
+    is => 'rw',
+    isa => Num,
+    default => 2,
+    coerce => sub { $_[0] + 0 },
+);
+
+#has rs => (
+#    is => 'rw',
+#    isa => HashRef,
+#    default => { nodes => 3 },
+#);
+
+has mongos => (
+    is => 'rw',
+    isa => Num,
+    default => 2,
+    coerce => sub { $_[0] + 0 },
+);
+
+#has other => (
+#    is => 'rw',
+#    isa => HashRef,
+#    default => { separateConfig => 1 },
+#);
+
+sub BUILD {
     my ($self) = @_;
-    if ($self->exists) {
-        $self->restart;
-    }
-    else {
-        #FileUtils.mkdir_p(@opts[:dataPath])
-        $self->start;
-    }
-    return $self;
+    print "ShellOrchestrator::BUILD\n";
+    print Dumper($self);
+}
+
+sub start {
+    my ($self) = @_;
+    my $sio = IO::String->new;
+    my $var = $self->var;
+    my $opts = {
+        'var' => $self->var,
+        'name' => $self->name,
+        'shards' => $self->shards,
+        'rs' => { nodes => 3 }, #$self->rs,
+        'mongos' => $self->mongos,
+        'other' => { separateConfig => 1 }, #$self->other,
+    };
+    my $json_opts = encode_json $opts;
+    $self->sh("var $var = new ShardingTest( $json_opts );", $sio);
+    return ${$sio->string_ref};
+};
+
+sub stop {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $sio = IO::String->new;
+    $self->sh("$var.stop();", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /\*\*\* ShardingTest test completed /;
+    return ${$sio->string_ref};
+};
+
+sub restart {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $sio = IO::String->new;
+    $self->sh("$var.restartMongos();", $sio);
+    return ${$sio->string_ref};
+};
+
+sub get_nodes {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $nodes = $self->x_json("$var._mongos;");
+    return map { MongoDBTest::Node->new(cluster => $self, conn => $_) } @$nodes;
+};
+
+sub as_uri {
+    my ($self) = @_;
+    return "mongodb://" . join(',', map { $_->host_port } $self->get_nodes);
 };
 
 package MongoDBTest::ShellOrchestrator;
@@ -453,7 +578,6 @@ sub _build_server_set {
     my $class =  "MongoDBTest::" . ($self->is_replica ? "ReplSetTest" : "ShardingTest");
     return $class->new(
         ms => $self->ms,
-        kind => 'rs',
     );
 }
 

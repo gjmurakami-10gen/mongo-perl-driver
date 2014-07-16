@@ -1,5 +1,13 @@
 # Mongo Shell Cluster Testing Notes
 
+TODO
+
+- tests for ShardingTest
+- MONGOPATH support
+- config file to ReplSetTest and ShardingTest opts
+- MongodTest type single for mongod config
+
+
 Running all regular test files under a specific configuration:
 
     ./devel/bin/harness.pl devel/clusters/sharded-2.6.yml -- make test
@@ -16,9 +24,9 @@ MongoShellTest version
 
     ./devel/bin/harness-ms.pl devel/clusters/replicaset-2.6.yml make test
 
-MONGOPATH
+MONGOPATH - assuming expanded MongoDB downloads are sibling directories
 
-    export MONGOPATH=$(ruby -e 'puts Dir["#{ENV["HOME"]}/10gen/mongodb-*/bin"].reverse.join(":")')
+    export MONGOPATH=$(ruby -e 'puts Dir["../mongodb-*[0-9]/bin"].map{|p|File.absolute_path(p)}.reverse.join(":")')
 
 ## mongo shell test framework essentials
 
