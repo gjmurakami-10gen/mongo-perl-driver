@@ -62,9 +62,9 @@ subtest "rs methods" => sub {
     print "secondaries:\n";
     print Dumper($rs->secondaries);
 
-    my $seeds = $rs->seeds;
-    print "seeds: $seeds\n";
-    is(split(',', $seeds), 3);
+    my $as_uri = $rs->as_uri;
+    print "as_uri: $as_uri\n";
+    is(split(',', $as_uri), 3);
 };
 
 subtest "rs restart" => sub {
@@ -77,11 +77,5 @@ subtest "rs restart" => sub {
 
 done_testing;
 
-print "stopping cluster...\n";
-my $rs = MongoDBTest::TestUtils::ensure_cluster(ms => $ms, kind => 'rs');
-$rs->stop;
-print "cluster stopped.\n";
+1;
 
-print "stopping mongo shell...\n";
-$ms->stop;
-print "end of mongo_shell.t\n";

@@ -292,6 +292,7 @@ use Moo;
 use Types::Standard -types;
 use IO::String;
 use JSON;
+use Data::Dumper;
 
 extends 'MongoDBTest::ClusterTest';
 
