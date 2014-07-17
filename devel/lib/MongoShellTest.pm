@@ -464,7 +464,7 @@ has mongos => (
 
 sub BUILD {
     my ($self) = @_;
-    print "ShellOrchestrator::BUILD\n";
+    print "ShardingTest::BUILD\n";
     print Dumper($self);
 }
 
@@ -573,10 +573,16 @@ sub is_replica {
     return $self->type eq 'replica';
 }
 
+my $class_for_type = {
+   single => "MongodTest",
+   replica => "ReplSetTest",
+   sharded => "ShardingTest"
+};
+
 sub _build_server_set {
     my ($self) = @_;
 
-    my $class =  "MongoDBTest::" . ($self->is_replica ? "ReplSetTest" : "ShardingTest");
+    my $class =  "MongoDBTest::" . %$class_for_type{$self->type};
     return $class->new(
         ms => $self->ms,
     );
@@ -584,6 +590,13 @@ sub _build_server_set {
 
 sub BUILD {
     my ($self) = @_;
+    my $config = $self->config;
+    print "ShellOrchestrator MONGOPATH: $ENV{MONGOPATH}, config:\n";
+    print Dumper($config);
+    my $version = $config->{default_version};
+    my @matched_paths = grep {/-$version/} split /:/, $ENV{MONGOPATH};
+    $ENV{PATH} = $matched_paths[0] . ":" . $ENV{PATH} if @matched_paths;
+    print "PATH: $ENV{PATH}\n";
     $self->ms(MongoDBTest::Shell->new);
 }
 

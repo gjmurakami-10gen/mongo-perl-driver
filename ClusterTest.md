@@ -2,8 +2,6 @@
 
 TODO
 
-- tests for ShardingTest
-- MONGOPATH support
 - config file to ReplSetTest and ShardingTest opts
 - MongodTest type single for mongod config
 
