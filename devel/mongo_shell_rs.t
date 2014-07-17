@@ -77,5 +77,7 @@ subtest "rs restart" => sub {
 
 done_testing;
 
+$ms->stop;
+
 1;
 

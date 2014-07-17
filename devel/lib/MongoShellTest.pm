@@ -27,17 +27,16 @@ sub parse_psuedo_array {
     return map { trim $_ } split(/,/, $s);
 };
 
+my $class_for_key = {
+   'md' => "MongodTest",
+   'rs' => "ReplSetTest",
+   'sc' => "ShardingTest"
+};
+
 sub ensure_cluster {
     my (%args) = @_;
-    if  ($args{kind} eq 'rs') {
-        my $rs = MongoDBTest::ReplSetTest->new(ms => $args{ms});
-        return $rs->ensure_cluster;
-    }
-    elsif ($args{kind} eq 'sc') {
-        my $sc = MongoDBTest::ShardingTest->new(ms => $args{ms});
-        return $sc->ensure_cluster;
-    }
-    return undef;
+    my $class =  "MongoDBTest::" . %$class_for_key{$args{kind}};
+    return $class->new(ms => $args{ms})->ensure_cluster;
 };
 
 package MongoDBTest::Shell;
@@ -286,6 +285,87 @@ sub ensure_cluster {
     return $self;
 };
 
+package MongoDBTest::MongodTest;
+
+use Moo;
+use Types::Standard -types;
+use IO::String;
+use JSON;
+use Data::Dumper;
+
+extends 'MongoDBTest::ClusterTest';
+
+has var => (
+    is => 'rw',
+    isa => Str,
+    default => 'md',
+);
+
+has kind => (
+    is => 'rw',
+    isa => Str,
+    default => 'md',
+);
+
+has port => (
+    is => 'rw',
+    isa => Num,
+    default => 27001,
+    coerce => sub { $_[0] + 0 },
+);
+
+sub BUILD {
+    my ($self) = @_;
+    #print "MongodTest::BUILD\n";
+    #print Dumper($self);
+}
+
+sub start {
+    my ($self) = @_;
+    my $sio = IO::String->new;
+    my $var = $self->var;
+    my $port = $self->port;
+    $self->sh("var $var = startMongodTest( $port );", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ / started program mongod /m;
+    return ${$sio->string_ref};
+};
+
+sub stop {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $sio = IO::String->new;
+    my $port = $self->port;
+    $self->sh("MongoRunner.stopMongod( $port, undefined, true );", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ / stopped mongo program /m;
+    return ${$sio->string_ref};
+};
+
+sub restart {
+    my ($self) = @_;
+    my $var = $self->var;
+    my $sio = IO::String->new;
+    my $port = $self->port;
+    $self->sh("try { $var.adminCommand({ismaster: 1}); } catch (err) { $var = startMongodTest( $port ); }", $sio);
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /(ismaster)|( started program mongod )/m;
+    return ${$sio->string_ref};
+};
+
+sub name {
+    my ($self) = @_;
+    my $var = $self->var;
+    return $self->x_s("$var.name;");
+};
+
+sub node {
+    my ($self) = @_;
+    return MongoDBTest::Node->new(cluster => $self, conn => $self->name);
+};
+
+sub as_uri {
+    my ($self) = @_;
+    return "mongodb://" . $self->name;
+};
+
 package MongoDBTest::ReplSetTest;
 
 use Moo;
@@ -330,8 +410,8 @@ has startPort => (
 
 sub BUILD {
     my ($self) = @_;
-    print "ReplSetTest::BUILD\n";
-    print Dumper($self);
+    #print "ReplSetTest::BUILD\n";
+    #print Dumper($self);
 }
 
 sub start {
@@ -347,11 +427,11 @@ sub start {
     my $json_opts = encode_json $opts;
     $self->sh("var $var = new ReplSetTest( $json_opts );", $sio);
     $self->sh("$var.startSet();", $sio);
-    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest Starting/;
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest Starting/m;
     $self->sh("$var.initiate();", $sio);
-    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /Config now saved locally.  Should come online in about a minute./;
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /Config now saved locally.  Should come online in about a minute./m;
     $self->sh("$var.awaitReplication();", $sio);
-    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest awaitReplication: finished: all/;
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest awaitReplication: finished: all/m;
     return ${$sio->string_ref};
 };
 
@@ -360,7 +440,7 @@ sub stop {
     my $var = $self->var;
     my $sio = IO::String->new;
     $self->sh("$var.stopSet();", $sio);
-    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/;
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest stopSet \*\*\* Shut down repl set - test worked \*\*\*/m;
     return ${$sio->string_ref};
 };
 
@@ -371,7 +451,7 @@ sub restart {
     $self->sh("$var.restartSet();", $sio);
     $self->sh("$var.awaitSecondaryNodes(30000);", $sio);
     $self->sh("$var.awaitReplication(30000);", $sio);
-    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest awaitReplication: finished: all/;
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /ReplSetTest awaitReplication: finished: all/m;
     return ${$sio->string_ref};
 };
 
@@ -464,8 +544,8 @@ has mongos => (
 
 sub BUILD {
     my ($self) = @_;
-    print "ShardingTest::BUILD\n";
-    print Dumper($self);
+    #print "ShardingTest::BUILD\n";
+    #print Dumper($self);
 }
 
 sub start {
@@ -490,7 +570,7 @@ sub stop {
     my $var = $self->var;
     my $sio = IO::String->new;
     $self->sh("$var.stop();", $sio);
-    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /\*\*\* ShardingTest test completed /;
+    die ${$sio->string_ref} unless ${$sio->string_ref} =~ /\*\*\* ShardingTest test completed /m;
     return ${$sio->string_ref};
 };
 
@@ -591,12 +671,12 @@ sub _build_server_set {
 sub BUILD {
     my ($self) = @_;
     my $config = $self->config;
-    print "ShellOrchestrator MONGOPATH: $ENV{MONGOPATH}, config:\n";
-    print Dumper($config);
+    #print "ShellOrchestrator MONGOPATH: $ENV{MONGOPATH}, config:\n";
+    #print Dumper($config);
     my $version = $config->{default_version};
     my @matched_paths = grep {/-$version/} split /:/, $ENV{MONGOPATH};
     $ENV{PATH} = $matched_paths[0] . ":" . $ENV{PATH} if @matched_paths;
-    print "PATH: $ENV{PATH}\n";
+    #print "PATH: $ENV{PATH}\n";
     $self->ms(MongoDBTest::Shell->new);
 }
 

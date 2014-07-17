@@ -2,9 +2,8 @@
 
 TODO
 
-- config file to ReplSetTest and ShardingTest opts
-- MongodTest type single for mongod config
-
+- dataPath
+- config file to MongodTest, ReplSetTest and ShardingTest opts
 
 Running all regular test files under a specific configuration:
 
