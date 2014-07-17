@@ -231,6 +231,7 @@ package MongoDBTest::ClusterTest;
 
 use Moo;
 use Types::Standard -types;
+use Cwd;
 
 has ms => (
     is => 'rw',
@@ -248,6 +249,12 @@ has kind => (
     is => 'rw',
     isa => Str,
     default => 'ct',
+);
+
+has dataPath => (
+    is => 'rw',
+    isa => Str,
+    default => getcwd . '/data/',
 );
 
 sub x_s {
@@ -279,7 +286,7 @@ sub ensure_cluster {
         $self->restart;
     }
     else {
-        #FileUtils.mkdir_p(@opts[:dataPath])
+        mkdir($self->dataPath);
         $self->start;
     }
     return $self;
@@ -324,8 +331,8 @@ sub start {
     my ($self) = @_;
     my $sio = IO::String->new;
     my $var = $self->var;
-    my $port = $self->port;
-    $self->sh("var $var = startMongodTest( $port );", $sio);
+    $self->sh("MongoRunner.dataPath = '${\$self->dataPath}';", $sio);
+    $self->sh("var $var = startMongodTest( ${\$self->port} );", $sio);
     die ${$sio->string_ref} unless ${$sio->string_ref} =~ / started program mongod /m;
     return ${$sio->string_ref};
 };
@@ -334,8 +341,7 @@ sub stop {
     my ($self) = @_;
     my $var = $self->var;
     my $sio = IO::String->new;
-    my $port = $self->port;
-    $self->sh("MongoRunner.stopMongod( $port, undefined, true );", $sio);
+    $self->sh("MongoRunner.stopMongod( ${\$self->port}, undefined, true );", $sio);
     die ${$sio->string_ref} unless ${$sio->string_ref} =~ / stopped mongo program /m;
     return ${$sio->string_ref};
 };
@@ -344,8 +350,7 @@ sub restart {
     my ($self) = @_;
     my $var = $self->var;
     my $sio = IO::String->new;
-    my $port = $self->port;
-    $self->sh("try { $var.adminCommand({ismaster: 1}); } catch (err) { $var = startMongodTest( $port ); }", $sio);
+    $self->sh("try { $var.adminCommand({ismaster: 1}); } catch (err) { $var = startMongodTest( ${\$self->port} ); }", $sio);
     die ${$sio->string_ref} unless ${$sio->string_ref} =~ /(ismaster)|( started program mongod )/m;
     return ${$sio->string_ref};
 };
@@ -418,6 +423,7 @@ sub start {
     my ($self) = @_;
     my $sio = IO::String->new;
     my $var = $self->var;
+    $self->sh("MongoRunner.dataPath = '${\$self->dataPath}';", $sio);
     my $opts = {
         'var' => $self->var,
         'name' => $self->name,
@@ -552,6 +558,7 @@ sub start {
     my ($self) = @_;
     my $sio = IO::String->new;
     my $var = $self->var;
+    $self->sh("MongoRunner.dataPath = '${\$self->dataPath}';", $sio);
     my $opts = {
         'var' => $self->var,
         'name' => $self->name,
