@@ -4,6 +4,14 @@ TODO
 
 - add & update mongo_shell_md.t, kill kind, mod $orc->ensure_cluster, 
 - config file to MongodTest, ReplSetTest and ShardingTest opts
+- config generator
+  - uniqueness for ports, vars
+  - start port for whole cluster
+  - traversal, default names and tags
+  - version, MONGOPATH
+  - track ports, pids
+  - high-level and low-level
+  - single, replica, sharded
 
 Running all regular test files under a specific configuration:
 

@@ -31,16 +31,16 @@ use Data::Dumper;
 use IO::String;
 use JSON;
 
-my $orc = MongoDBTest::ShellOrchestrator->new( config => { type => 'replica' } );
+my $orch = MongoDBTest::ShellOrchestrator->new( config => { type => 'replica' } );
 
 subtest "sc attributes"=> sub {
-    my $sc = $orc->server_set->ensure_cluster;
+    my $sc = $orch->ensure_cluster;
 
     is($sc->exists, 1);
 };
 
 subtest "sc methods" => sub {
-    my $sc = $orc->server_set->ensure_cluster;
+    my $sc = $orch->ensure_cluster;
 
     is($sc->exists, 1);
 
@@ -54,7 +54,7 @@ subtest "sc methods" => sub {
 };
 
 subtest "sc restart" => sub {
-    my $sc = $orc->server_set->ensure_cluster;
+    my $sc = $orch->ensure_cluster;
 
     is($sc->exists, 1);
     my $restart = $sc->restart;

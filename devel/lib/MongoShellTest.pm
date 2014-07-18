@@ -667,6 +667,11 @@ sub _build_server_set {
     );
 }
 
+sub ensure_cluster {
+    my ($self) = @_;
+    return $self->server_set->ensure_cluster;
+}
+
 sub BUILD {
     my ($self) = @_;
     my $config_file = $self->config_file;
