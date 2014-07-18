@@ -626,18 +626,10 @@ has config_file => (
 # Lazy or default
 
 has config => (
-    is => 'lazy',
+    is => 'rw',
     isa => HashRef,
+    default => sub { return {type => 'replica'} },
 );
-
-sub _build_config {
-    my ($self) = @_;
-    my $config_file = $self->config_file;
-    Carp::croak( sprintf( "no readable config file '%s' found", $self->config_file) )
-        unless -r $self->config_file;
-    my ($config) = YAML::XS::LoadFile($self->config_file);
-    return $config;
-}
 
 has server_set => (
     is => 'lazy',
@@ -677,11 +669,17 @@ sub _build_server_set {
 
 sub BUILD {
     my ($self) = @_;
+    my $config_file = $self->config_file;
+    if ($config_file ne '') {
+        Carp::croak( sprintf( "no readable config file '%s' found", $self->config_file) )
+            unless -r $self->config_file;
+        $self->config(YAML::XS::LoadFile($self->config_file));
+    }
     my $config = $self->config;
     #print "ShellOrchestrator MONGOPATH: $ENV{MONGOPATH}, config:\n";
     #print Dumper($config);
     my $version = $config->{default_version};
-    my @matched_paths = grep {/-$version/} split /:/, $ENV{MONGOPATH};
+    my @matched_paths = grep {/-$version/} split /:/, ($ENV{MONGOPATH} || '');
     $ENV{PATH} = $matched_paths[0] . ":" . $ENV{PATH} if @matched_paths;
     #print "PATH: $ENV{PATH}\n";
     $self->ms(MongoDBTest::Shell->new);

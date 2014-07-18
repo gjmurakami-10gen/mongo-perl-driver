@@ -2,6 +2,7 @@
 
 TODO
 
+- add & update mongo_shell_md.t, kill kind, mod $orc->ensure_cluster, 
 - config file to MongodTest, ReplSetTest and ShardingTest opts
 
 Running all regular test files under a specific configuration:
