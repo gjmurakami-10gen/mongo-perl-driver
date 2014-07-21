@@ -2,7 +2,7 @@
 
 TODO
 
-- add & update mongo_shell_md.t, kill kind, mod $orc->ensure_cluster, 
+- failover tests for replica set and sharded mongos
 - config file to MongodTest, ReplSetTest and ShardingTest opts
 - config generator
   - uniqueness for ports, vars
@@ -43,9 +43,10 @@ MONGOPATH - assuming expanded MongoDB downloads are sibling directories
     - runs 14 sharding tests in 1 minute
     - the replica set / sharded cluster is not shutdown after each test, instead nodes are restarted if necessary
     - mongo shell output is logged to mongo_shell.log, lines are prefixed by a process tag
+    - mongo shell is MONGO_SHELL environment variable or ../mongo/mongo
     - dataPath is CWD/data/
-    - classes Mongo::Shell, Mongo::ClusterTest::Node, Mongo::ReplSetTest, Mongo::ShardingTest
-    - methods provided for nodes, primary, secondaries, uri, kill, stop
+    - Mongo::Shell, Mongo::ReplSetTest, Mongo::ShardingTest proxy mongo shell and JS objects
+    - Mongo::ClusterTest::Node methods provided, primary, secondaries, uri, kill, stop
     - MONGO_SHUTDOWN=0 environment variable to NOT shutdown the cluster and mongo shell after running tests
       permitting subsequent tests to be run in less than a second instead of suffering 25-second replica set startup
       and examination of live cluster and database

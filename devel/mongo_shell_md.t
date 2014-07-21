@@ -31,33 +31,31 @@ use Data::Dumper;
 use IO::String;
 use JSON;
 
-my $orch = MongoDBTest::ShellOrchestrator->new( config => { type => 'sharded' } );
+my $orch = MongoDBTest::ShellOrchestrator->new( config => { type => 'single' } );
 
-subtest "sc attributes"=> sub {
-    my $sc = $orch->ensure_cluster;
+subtest "md attributes"=> sub {
+    my $md = $orch->ensure_cluster;
 
-    is($sc->exists, 1);
+    is($md->exists, 1);
+    print "dataPath: ${\$md->dataPath}\n";
 };
 
-subtest "sc methods" => sub {
-    my $sc = $orch->ensure_cluster;
+subtest "md methods" => sub {
+    my $md = $orch->ensure_cluster;
 
-    is($sc->exists, 1);
+    is($md->exists, 1);
 
-    my $nodes = $sc->get_nodes;
-    print "get_nodes:\n";
-    print Dumper($nodes);
-
-    my $as_uri = $sc->as_uri;
+    my $as_uri = $md->as_uri;
     print "as_uri: $as_uri\n";
-    is(split(',', $as_uri), 2);
 };
 
-subtest "sc restart" => sub {
-    my $sc = $orch->ensure_cluster;
+subtest "md restart" => sub {
+    my $md = $orch->ensure_cluster;
 
-    is($sc->exists, 1);
-    my $restart = $sc->restart;
+    is($md->exists, 1);
+    my $stop = $md->stop;
+
+    my $restart = $md->restart;
     print Dumper($restart);
 };
 

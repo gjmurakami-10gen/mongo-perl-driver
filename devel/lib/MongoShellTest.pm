@@ -17,28 +17,6 @@
 use strict;
 use warnings;
 
-package MongoDBTest::TestUtils;
-
-use String::Util 'trim';
-
-sub parse_psuedo_array {
-    my ($s) = @_;
-    $s =~ s/^\[(.*)\]$/$1/sm;
-    return map { trim $_ } split(/,/, $s);
-};
-
-my $class_for_key = {
-   'md' => "MongodTest",
-   'rs' => "ReplSetTest",
-   'sc' => "ShardingTest"
-};
-
-sub ensure_cluster {
-    my (%args) = @_;
-    my $class =  "MongoDBTest::" . %$class_for_key{$args{kind}};
-    return $class->new(ms => $args{ms})->ensure_cluster;
-};
-
 package MongoDBTest::Shell;
 
 use Moo;
@@ -245,12 +223,6 @@ has var => (
     default => 'ct',
 );
 
-has kind => (
-    is => 'rw',
-    isa => Str,
-    default => 'ct',
-);
-
 has dataPath => (
     is => 'rw',
     isa => Str,
@@ -298,17 +270,10 @@ use Moo;
 use Types::Standard -types;
 use IO::String;
 use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::ClusterTest';
 
 has var => (
-    is => 'rw',
-    isa => Str,
-    default => 'md',
-);
-
-has kind => (
     is => 'rw',
     isa => Str,
     default => 'md',
@@ -323,8 +288,6 @@ has port => (
 
 sub BUILD {
     my ($self) = @_;
-    #print "MongodTest::BUILD\n";
-    #print Dumper($self);
 }
 
 sub start {
@@ -377,7 +340,6 @@ use Moo;
 use Types::Standard -types;
 use IO::String;
 use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::ClusterTest';
 
@@ -391,12 +353,6 @@ has name => (
     is => 'rw',
     isa => Str,
     default => 'test',
-);
-
-has kind => (
-    is => 'rw',
-    isa => Str,
-    default => 'rs',
 );
 
 has nodes => (
@@ -415,8 +371,6 @@ has startPort => (
 
 sub BUILD {
     my ($self) = @_;
-    #print "ReplSetTest::BUILD\n";
-    #print Dumper($self);
 }
 
 sub start {
@@ -500,7 +454,6 @@ use Moo;
 use Types::Standard -types;
 use IO::String;
 use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::ClusterTest';
 
@@ -516,12 +469,6 @@ has name => (
     default => 'test',
 );
 
-has kind => (
-    is => 'rw',
-    isa => Str,
-    default => 'sc',
-);
-
 has shards => (
     is => 'rw',
     isa => Num,
@@ -529,11 +476,11 @@ has shards => (
     coerce => sub { $_[0] + 0 },
 );
 
-#has rs => (
-#    is => 'rw',
-#    isa => HashRef,
-#    default => { nodes => 3 },
-#);
+has rs => (
+    is => 'rw',
+    isa => HashRef,
+    default => sub { return { nodes => 3 } },
+);
 
 has mongos => (
     is => 'rw',
@@ -542,16 +489,14 @@ has mongos => (
     coerce => sub { $_[0] + 0 },
 );
 
-#has other => (
-#    is => 'rw',
-#    isa => HashRef,
-#    default => { separateConfig => 1 },
-#);
+has other => (
+    is => 'rw',
+    isa => HashRef,
+    default => sub { return { separateConfig => 1 } },
+);
 
 sub BUILD {
     my ($self) = @_;
-    #print "ShardingTest::BUILD\n";
-    #print Dumper($self);
 }
 
 sub start {
@@ -563,9 +508,9 @@ sub start {
         'var' => $self->var,
         'name' => $self->name,
         'shards' => $self->shards,
-        'rs' => { nodes => 3 }, #$self->rs,
+        'rs' => $self->rs,
         'mongos' => $self->mongos,
-        'other' => { separateConfig => 1 }, #$self->other,
+        'other' => $self->other,
     };
     my $json_opts = encode_json $opts;
     $self->sh("var $var = new ShardingTest( $json_opts );", $sio);
@@ -608,7 +553,6 @@ use Types::Standard -types;
 use Carp;
 use YAML::XS;
 use Types::Path::Tiny qw/AbsFile/;
-use Data::Dumper;
 
 # Optional
 
@@ -681,12 +625,11 @@ sub BUILD {
         $self->config(YAML::XS::LoadFile($self->config_file));
     }
     my $config = $self->config;
-    #print "ShellOrchestrator MONGOPATH: $ENV{MONGOPATH}, config:\n";
-    #print Dumper($config);
     my $version = $config->{default_version};
-    my @matched_paths = grep {/-$version/} split /:/, ($ENV{MONGOPATH} || '');
-    $ENV{PATH} = $matched_paths[0] . ":" . $ENV{PATH} if @matched_paths;
-    #print "PATH: $ENV{PATH}\n";
+    if (defined $version) {
+        my @matched_paths = grep {/-$version/} split /:/, ($ENV{MONGOPATH} || '');
+        $ENV{PATH} = $matched_paths[0] . ":" . $ENV{PATH} if @matched_paths;
+    }
     $self->ms(MongoDBTest::Shell->new);
 }
 
