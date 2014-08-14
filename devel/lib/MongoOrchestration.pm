@@ -28,8 +28,6 @@ use Moo;
 use Types::Standard -types;
 use HTTP::Tiny;
 use JSON;
-use File::Spec::Functions;
-use Data::Dumper;
 
 has base_uri => (
     is => 'rw',
@@ -80,7 +78,6 @@ sub http_request {
     $self->request(::cat_uri($self->{uri}, $path));
     my $request = $self->base_uri . $self->request;
     $self->response(HTTP::Tiny->new->request($method, $request, $options));
-    #print Dumper($self->response);
     if ($self->{response}->{headers}->{'content-length'} ne '0' and
             length($self->{response}->{content}) > 0 and
             $self->{response}->{headers}->{'content-type'} eq 'application/json') {
@@ -92,14 +89,19 @@ sub http_request {
     return $self->response;
 };
 
+sub post {
+    my ($self, $path, $options) = @_;
+    return $self->http_request('post', $path, $options);
+}
+
 sub get {
     my ($self, $path, $options) = @_;
     return $self->http_request('get', $path, $options);
 }
 
-sub post {
+sub put {
     my ($self, $path, $options) = @_;
-    return $self->http_request('post', $path, $options);
+    return $self->http_request('put', $path, $options);
 }
 
 sub delete {
@@ -124,10 +126,6 @@ sub result_message {
 package MongoDBTest::Orchestration::Service;
 
 use Moo;
-use Types::Standard -types;
-use HTTP::Tiny;
-use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::Orchestration::Base';
 
@@ -156,13 +154,43 @@ sub configure {
     return $class->new(uri => $uri, config => $config);
 };
 
+package MongoDBTest::Orchestration::Host;
+
+use Moo;
+
+extends 'MongoDBTest::Orchestration::Base';
+
+
+sub status {
+    my ($self) = @_;
+    $self->get;
+    $self->object($self->parsed_response) if $self->response->{status} eq '200';
+    return $self;
+};
+
+sub start {
+    my ($self) = @_;
+    $self->put('start');
+    return $self;
+};
+
+sub stop {
+    my ($self) = @_;
+    $self->put('stop');
+    return $self;
+};
+
+sub restart {
+    my ($self) = @_;
+    $self->put('restart');
+    return $self;
+};
+
 package MongoDBTest::Orchestration::Cluster;
 
 use Moo;
 use Types::Standard -types;
-use HTTP::Tiny;
 use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::Orchestration::Base';
 
@@ -181,7 +209,6 @@ sub BUILD {
     my ($self) = @_;
     $self->post_data($self->{config}->{post_data});
     $self->id($self->{post_data}->{id});
-    #print "Cluster::BUILD uri: $self->{uri}, id: $self->{id}";
 };
 
 sub status {
@@ -201,7 +228,7 @@ sub start {
         }
     }
     else {
-        #$self->put($sefl->id);
+        #$self->put($self->id);
     }
     return $self;
 };
@@ -218,14 +245,98 @@ sub stop {
     return $self;
 };
 
+sub host {
+    my ($self, $resource, $host_info, $id_key) = @_;
+    my $request = "$self->{uri}/$self->{id}/$resource/$host_info->{$id_key}";
+    return MongoDBTest::Orchestration::Host->new(uri => $request, object => $host_info);
+};
+
+sub hosts {
+    my ($self, $get, $resource, $id_key) = @_;
+    my $uri = "$self->{base_uri}$self->{uri}/$self->{id}/$get";
+    my $response = HTTP::Tiny->new->get($uri);
+    if ($response->{status} eq '200') {
+        my $content = decode_json($response->{content});
+        return map { $self->host($resource, $_, $id_key) } @$content;
+    }
+    else {
+        my @empty;
+        return @empty;
+    }
+};
+
 package MongoDBTest::Orchestration::Hosts;
 
 use Moo;
-use Types::Standard -types;
-use HTTP::Tiny;
-use JSON;
-use Data::Dumper;
 
 extends 'MongoDBTest::Orchestration::Cluster';
+
+sub host {
+    my ($self) = @_;
+    my $uri = ::cat_uri($self->uri, $self->id);
+    return MongoDBTest::Orchestration::Host->new(uri => $uri, object => $self->object);
+};
+
+package MongoDBTest::Orchestration::RS;
+
+use Moo;
+use HTTP::Tiny;
+use JSON;
+
+extends 'MongoDBTest::Orchestration::Cluster';
+
+sub members {
+    my ($self) = @_;
+    return $self->hosts('members', 'members', '_id'); # host_id
+}
+
+sub primary {
+    my ($self) = @_;
+    my $uri = "$self->{base_uri}$self->{uri}/$self->{id}/primary";
+    my $response = HTTP::Tiny->new->get($uri);
+    if ($response->{status} eq '200') {
+        my $content = decode_json($response->{content});
+        return $self->host('members', $content, '_id'); # host_id
+    }
+    else {
+        return undef;
+    }
+};
+
+sub secondaries {
+    my ($self) = @_;
+    return $self->hosts('secondaries', 'members', '_id'); # host_id
+};
+
+sub arbiters {
+    my ($self) = @_;
+    return $self->hosts('arbiters', 'members', '_id'); # host_id
+};
+
+sub hidden {
+    my ($self) = @_;
+    return $self->hosts('hidden', 'members', '_id'); # host_id
+};
+
+package MongoDBTest::Orchestration::SH;
+
+use Moo;
+
+extends 'MongoDBTest::Orchestration::Cluster';
+
+sub members {
+    my ($self) = @_;
+    return $self->hosts('members', 'members', 'id');
+}
+
+sub configservers {
+    my ($self) = @_;
+    return $self->hosts('configservers', 'hosts', 'id');
+}
+
+sub routers {
+    my ($self) = @_;
+    return $self->hosts('routers', 'hosts', 'id');
+}
 
 1;
