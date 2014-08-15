@@ -14,7 +14,6 @@
 #  limitations under the License.
 #
 
-
 use strict;
 use warnings;
 use Test::More 0.96;
@@ -24,9 +23,8 @@ use Test::Warn;
 use MongoDB;
 
 use lib 'devel/lib';
-
-use Data::Dumper;
 use MongoOrchestration;
+use Data::Dumper;
 
 subtest 'Base http_request method' => sub {
     my $base = MongoDBTest::Orchestration::Base->new;
