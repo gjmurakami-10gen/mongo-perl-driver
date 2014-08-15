@@ -41,7 +41,7 @@ subtest 'Base get method' => sub {
     is($base->{response}->{status}, '200');
     is($base->{parsed_response}->{service}, 'mongo-orchestration');
     is($base->{response}->{reason}, 'OK');
-    like($base->result_message, qr/^GET .* OK, .* JSON:/, 'Base result_message')
+    like($base->message_summary, qr/^GET .* OK, .* JSON:/, 'Base message_summary')
 };
 
 my $standalone_config = {
@@ -75,28 +75,28 @@ subtest 'Cluster/Hosts start, status and stop methods' => sub {
     $cluster->stop; # force stop
 
     $cluster->start;
-    like($cluster->result_message, qr{^POST /hosts, 200 OK, response JSON: });
+    like($cluster->message_summary, qr{^POST /hosts, 200 OK, response JSON: });
     is($cluster->{object}->{id}, 'standalone');
 
     $cluster->start; # start for already started
-    like($cluster->result_message, qr{GET /hosts/standalone, 200 OK, response JSON: });
+    like($cluster->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
     is($cluster->{object}->{id}, 'standalone');
 
     $cluster->status; # status for started
-    like($cluster->result_message, qr{GET /hosts/standalone, 200 OK, response JSON: });
+    like($cluster->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
 
     #print "uri: $cluster->{object}->{uri}\n";
 
     $cluster->stop;
-    is($cluster->result_message, 'DELETE /hosts/standalone, 204 No Content');
+    is($cluster->message_summary, 'DELETE /hosts/standalone, 204 No Content');
 
     $cluster->stop; # stop for already stopped
-    is($cluster->result_message, 'GET /hosts/standalone, 404 Not Found');
+    is($cluster->message_summary, 'GET /hosts/standalone, 404 Not Found');
 
     $cluster->status; # status for stopped
-    is($cluster->result_message, 'GET /hosts/standalone, 404 Not Found');
+    is($cluster->message_summary, 'GET /hosts/standalone, 404 Not Found');
 
-    #print "@{[$cluster->result_message]}\n";
+    #print "@{[$cluster->message_summary]}\n";
 };
 
 subtest 'Cluster/Hosts host method object with status, start, stop and restart methods' => sub {
@@ -106,24 +106,24 @@ subtest 'Cluster/Hosts host method object with status, start, stop and restart m
     $cluster->start;
     my $host = $cluster->host;
     ok($host->isa('MongoDBTest::Orchestration::Host'));
-    is($host->uri, '/hosts/standalone');
+    is($host->base_path, '/hosts/standalone');
     is($host->{object}->{id}, 'standalone');
 
     $host->status;
-    like($host->result_message, qr{GET /hosts/standalone, 200 OK, response JSON: });
+    like($host->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
     is($host->{object}->{id}, 'standalone');
 
     $host->stop;
-    is($host->result_message, 'PUT /hosts/standalone/stop, 200 OK');
+    is($host->message_summary, 'PUT /hosts/standalone/stop, 200 OK');
 
     $host->status; # TODO - need status for no process
-    like($host->result_message, qr{GET /hosts/standalone, 200 OK, response JSON: });
+    like($host->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
 
     $host->start;
-    is($host->result_message, 'PUT /hosts/standalone/start, 200 OK');
+    is($host->message_summary, 'PUT /hosts/standalone/start, 200 OK');
 
     $host->restart;
-    is($host->result_message, 'PUT /hosts/standalone/restart, 200 OK');
+    is($host->message_summary, 'PUT /hosts/standalone/restart, 200 OK');
 
     $cluster->stop;
 };
@@ -184,34 +184,34 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
     @servers = $cluster->members;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/rs/repl0/members/});
+        like($_->{base_path}, qr{^/rs/repl0/members/});
         ok(exists($_->{object}->{host_id}));
     }
 
     my $primary = $cluster->primary;
     ok($primary->isa('MongoDBTest::Orchestration::Host'));
-    like($primary->{uri}, qr{^/rs/repl0/members/});
+    like($primary->{base_path}, qr{^/rs/repl0/primary});
     ok(exists($primary->{object}->{host_id}));
     ok(exists($primary->{object}->{uri}));
 
     @servers = $cluster->secondaries;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/rs/repl0/members/});
+        like($_->{base_path}, qr{^/rs/repl0/members/});
         ok(exists($_->{object}->{host_id}));
     }
 
     @servers = $cluster->arbiters;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/rs/repl0/members/});
+        like($_->{base_path}, qr{^/rs/repl0/members/});
         ok(exists($_->{object}->{host_id}));
     }
 
     @servers = $cluster->hidden;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/rs/repl0/members/});
+        like($_->{base_path}, qr{^/rs/repl0/members/});
         ok(exists($_->{object}->{host_id}));
     }
 
@@ -263,21 +263,21 @@ subtest 'Cluster/SH with members, configservers, routers' => sub {
     @servers = $cluster->members;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/sh/shard_cluster_1/members/sh});
+        like($_->{base_path}, qr{^/sh/shard_cluster_1/members/sh});
         ok(exists($_->{object}->{id}));
     }
 
     @servers = $cluster->configservers;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/sh/shard_cluster_1/hosts/});
+        like($_->{base_path}, qr{^/sh/shard_cluster_1/hosts/});
         ok(exists($_->{object}->{id}));
     }
 
     @servers = $cluster->routers;
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{uri}, qr{^/sh/shard_cluster_1/hosts/});
+        like($_->{base_path}, qr{^/sh/shard_cluster_1/hosts/});
         ok(exists($_->{object}->{id}));
     }
 

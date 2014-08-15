@@ -17,9 +17,9 @@
 use strict;
 use warnings;
 
-sub cat_uri {
-    my ($uri, $path) = @_;
-    return (defined($path) && $path ne '') ? (($uri || '') . '/' . $path) : $uri;
+sub cat_path {
+    my ($base_path, $path) = @_;
+    return (defined($path) && $path ne '') ? (($base_path || '') . '/' . $path) : $base_path;
 };
 
 package MongoDBTest::Orchestration::Base;
@@ -35,7 +35,7 @@ has base_uri => (
     default => 'http://localhost:8889'
 );
 
-has uri => (
+has base_path => (
     is => 'rw',
     isa => Str,
     default => '/'
@@ -47,7 +47,7 @@ has method => (
     default => 'get'
 );
 
-has request => (
+has abs_path => (
     is => 'rw',
     isa => Str,
     default => ''
@@ -75,9 +75,9 @@ sub http_request {
     my ($self, $method, $path, $options) = @_;
     $options ||= {};
     $self->method($method);
-    $self->request(::cat_uri($self->{uri}, $path));
-    my $request = $self->base_uri . $self->request;
-    $self->response(HTTP::Tiny->new->request($method, $request, $options));
+    $self->abs_path(::cat_path($self->{base_path}, $path));
+    my $uri = $self->base_uri . $self->abs_path;
+    $self->response(HTTP::Tiny->new->request($method, $uri, $options));
     if ($self->{response}->{headers}->{'content-length'} ne '0' and
             length($self->{response}->{content}) > 0 and
             $self->{response}->{headers}->{'content-type'} eq 'application/json') {
@@ -109,9 +109,9 @@ sub delete {
     return $self->http_request('delete', $path, $options);
 }
 
-sub result_message {
+sub message_summary {
     my ($self) = @_;
-    my $msg = "@{[uc($self->{method})]} $self->{request}";
+    my $msg = "@{[uc($self->{method})]} $self->{abs_path}";
     $msg .= ", $self->{response}->{status} $self->{response}->{reason}";
     return $msg if $self->{response}->{headers}->{'content-length'} eq "0";
     if ($self->{response}->{headers}->{'content-type'} eq 'application/json') {
@@ -149,9 +149,9 @@ sub check_service {
 sub configure {
     my ($self, $config) = @_;
     my $orchestration = $config->{orchestration};
-    my $uri = "/$orchestration";
+    my $base_path = "/$orchestration";
     my $class = 'MongoDBTest::Orchestration::' . ORCHESTRATION_CLASS->{$orchestration};
-    return $class->new(uri => $uri, config => $config);
+    return $class->new(base_path => $base_path, config => $config);
 };
 
 package MongoDBTest::Orchestration::Host;
@@ -159,7 +159,6 @@ package MongoDBTest::Orchestration::Host;
 use Moo;
 
 extends 'MongoDBTest::Orchestration::Base';
-
 
 sub status {
     my ($self) = @_;
@@ -247,13 +246,13 @@ sub stop {
 
 sub host {
     my ($self, $resource, $host_info, $id_key) = @_;
-    my $request = "$self->{uri}/$self->{id}/$resource/$host_info->{$id_key}";
-    return MongoDBTest::Orchestration::Host->new(uri => $request, object => $host_info);
+    my $base_path = "$self->{base_path}/$self->{id}/$resource/$host_info->{$id_key}";
+    return MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $host_info);
 };
 
 sub hosts {
     my ($self, $get, $resource, $id_key) = @_;
-    my $uri = "$self->{base_uri}$self->{uri}/$self->{id}/$get";
+    my $uri = "$self->{base_uri}$self->{base_path}/$self->{id}/$get";
     my $response = HTTP::Tiny->new->get($uri);
     if ($response->{status} eq '200') {
         my $content = decode_json($response->{content});
@@ -273,8 +272,8 @@ extends 'MongoDBTest::Orchestration::Cluster';
 
 sub host {
     my ($self) = @_;
-    my $uri = ::cat_uri($self->uri, $self->id);
-    return MongoDBTest::Orchestration::Host->new(uri => $uri, object => $self->object);
+    my $base_path = ::cat_path($self->{base_path}, $self->id);
+    return MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $self->object);
 };
 
 package MongoDBTest::Orchestration::RS;
@@ -292,11 +291,12 @@ sub members {
 
 sub primary {
     my ($self) = @_;
-    my $uri = "$self->{base_uri}$self->{uri}/$self->{id}/primary";
+    my $uri = "$self->{base_uri}$self->{base_path}/$self->{id}/primary";
     my $response = HTTP::Tiny->new->get($uri);
     if ($response->{status} eq '200') {
         my $content = decode_json($response->{content});
-        return $self->host('members', $content, '_id'); # host_id
+        my $base_path = "$self->{base_path}/$self->{id}/primary";
+        return MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $content);
     }
     else {
         return undef;
