@@ -200,7 +200,6 @@ has post_data => (
 
 has id => (
     is => 'rw',
-    isa => Str,
     default => ''
 );
 
@@ -212,18 +211,24 @@ sub BUILD {
 
 sub status {
     my ($self) = @_;
-    $self->get($self->id);
-    $self->object($self->parsed_response) if $self->{response}->{status} eq '200';
-    return $self;
+    if (defined($self->id) && $self->id ne '') {
+        $self->get($self->id);
+        if ($self->{response}->{status} eq '200') {
+            $self->object($self->parsed_response);
+            $self->id($self->{object}->{id});
+            return 1;
+        }
+    }
+    return 0;
 };
 
 sub start {
     my ($self) = @_;
-    $self->status;
-    if ($self->{response}->{status} ne '200') {
+    if (!$self->status) {
         $self->post('', {content => encode_json($self->post_data)});
         if ($self->{response}->{status} eq '200') {
             $self->object($self->parsed_response);
+            $self->id($self->{object}->{id});
         }
     }
     else {
@@ -234,8 +239,7 @@ sub start {
 
 sub stop {
     my ($self) = @_;
-    $self->status;
-    if ($self->{response}->{status} eq '200') {
+    if ($self->status) {
         $self->delete($self->id);
         if ($self->{response}->{status} eq '204') {
             #$self->object({});

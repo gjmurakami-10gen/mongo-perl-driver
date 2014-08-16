@@ -282,6 +282,42 @@ subtest 'Cluster/SH with members, configservers, routers' => sub {
     $cluster->stop;
 };
 
+my $hosts_preset_config = {
+    orchestration => 'hosts',
+    post_data => {
+        preset => 'basic.json',
+    }
+};
+
+my $rs_preset_config = {
+    orchestration => 'rs',
+    post_data => {
+        preset => 'basic.json',
+    }
+};
+
+my $sh_preset_config = {
+    orchestration => 'sh',
+    post_data => {
+        preset => 'basic.json',
+    }
+};
+
+subtest 'Service configure preset Cluster' => sub {
+    my $service = MongoDBTest::Orchestration::Service->new;
+    my @preset_configs = ($hosts_preset_config, $rs_preset_config, $sh_preset_config);
+    foreach (@preset_configs) {
+        my $cluster = $service->configure($_);
+        $cluster->status;
+        ok(!defined($cluster->id));
+        $cluster->start;
+        ok(defined($cluster->id));
+        is($cluster->{object}->{orchestration}, $_->{orchestration});
+        print "preset $cluster->{object}->{orchestration}/$_->{preset}, id: $cluster->{id}\n";
+        $cluster->stop;
+    }
+};
+
 done_testing;
 
 1;
