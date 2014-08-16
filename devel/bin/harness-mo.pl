@@ -35,39 +35,24 @@ if ( $opts{verbose} ) {
     Log::Any::Adapter->set('Stderr');
 }
 
-my ($config_file, @command) = @ARGV;
+my ($cluster_type, $preset, @command) = @ARGV;
 
-unless ( $config_file && @command ) {
-    die "usage: $0 <config-file> <command> [args ...]\n"
+unless ( $cluster_type && $preset && @command ) {
+    die "usage: $0 <hosts|rs|sh> <preset> <command> [args ...]\nexample: $0 hosts basic.json make test"
 }
 
-if ( ! -f $config_file ) {
-    my $new_config = "devel/clusters/$config_file";
-    if ( -f $new_config ) {
-        $config_file = $new_config;
-    }
-    else {
-        die "$config_file could not be found\n";
-    }
-}
-
-#say "Creating a cluster from $config_file";
-
-my $standalone_config = {
-    orchestration => 'hosts',
+my $configuration = {
+    orchestration => $cluster_type,
     post_data => {
-        id => 'standalone',
-        name => 'mongod',
-        procParams => {
-            journal => 1
-        }
+        preset => $preset
     }
 };
 
-my $orc = MongoDBTest::Orchestration::Service->new;
-my $configuration = $standalone_config;
-my $cluster = $orc->configure($configuration);
+my $orch = MongoDBTest::Orchestration::Service->new;
+my $cluster = $orch->configure($configuration);
 $cluster->start;
+
+die "cluster start error - @{[$cluster->message_summary]}\n" if $cluster->{response}->{status} ne '200';
 
 $ENV{MONGOD} = "mongodb://$cluster->{object}->{uri}";
 say "MONGOD=".$ENV{MONGOD};
