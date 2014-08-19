@@ -29,8 +29,7 @@ use Data::Dumper;
 subtest 'Base http_request method' => sub {
     my $base = MongoDBTest::Orchestration::Base->new;
     $base->get;
-    is($base->{response}->{status}, '200');
-    is($base->{parsed_response}->{service}, 'mongo-orchestration');
+    is($base->{response}->{status}, '200', "mongo-orchestration service at $base->{base_uri}") or done_testing, exit;
 };
 
 subtest 'Base get method' => sub {
@@ -313,7 +312,7 @@ subtest 'Service configure preset Cluster' => sub {
         $cluster->start;
         ok(defined($cluster->id));
         is($cluster->{object}->{orchestration}, $_->{orchestration});
-        print "preset $cluster->{object}->{orchestration}/$_->{preset}, id: $cluster->{id}\n";
+        #print "preset $cluster->{object}->{orchestration}/$_->{post_data}->{preset}, id: $cluster->{id}\n";
         $cluster->stop;
     }
 };
