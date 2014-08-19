@@ -20,8 +20,6 @@ use Test::More 0.96;
 use Test::Fatal;
 use Test::Warn;
 
-use MongoDB;
-
 use lib 'devel/lib';
 use MongoOrchestration;
 use Data::Dumper;
