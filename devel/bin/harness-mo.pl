@@ -38,7 +38,8 @@ if ( $opts{verbose} ) {
 my ($cluster_type, $preset, @command) = @ARGV;
 
 unless ( $cluster_type && $preset && @command ) {
-    die "usage: $0 <hosts|rs|sh> <preset> <command> [args ...]\nexample: $0 hosts basic.json make test"
+    print "usage: $0 <hosts|rs|sh> <preset> <command> [args ...]\nexample: $0 hosts basic.json make test";
+    exit 1;
 }
 
 my $configuration = {

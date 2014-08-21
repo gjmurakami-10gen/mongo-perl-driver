@@ -39,6 +39,7 @@ use Data::Dumper;
 
 has debug => (
     is => 'rw',
+    isa => Bool,
     default => 0
 );
 
@@ -74,11 +75,6 @@ has parsed_response => (
     is => 'rw'
 );
 
-has config => (
-    is => 'rw',
-    default => sub { return {}; }
-);
-
 has object => (
     is => 'rw',
     default => sub { return {}; }
@@ -97,7 +93,7 @@ sub http_request {
     }
     $self->response(HTTP::Tiny->new->request($method, $uri, $options));
     $self->parsed_response(::parse_response($self->response));
-    return $self->response;
+    return $self;
 };
 
 sub post {
@@ -143,7 +139,6 @@ sub message_summary {
 package MongoDBTest::Orchestration::Service;
 
 use Moo;
-use Data::Dumper;
 
 extends 'MongoDBTest::Orchestration::Base';
 
@@ -177,7 +172,7 @@ sub configure {
     my $class = 'MongoDBTest::Orchestration::' . ORCHESTRATION_CLASS->{$orchestration};
     my $base_path = "/$orchestration/$id";
     my $cluster = $class->new(base_path => $base_path, request_content => $request_content, id => $id);
-    return $cluster;
+    return $cluster->start;
 };
 
 package MongoDBTest::Orchestration::Host;
@@ -189,26 +184,23 @@ extends 'MongoDBTest::Orchestration::Base';
 sub status {
     my ($self) = @_;
     $self->get;
-    $self->object($self->parsed_response) if $self->response->{status} eq '200';
+    $self->object($self->parsed_response) if $self->ok;
     return $self;
 };
 
 sub start {
     my ($self) = @_;
-    $self->put('start');
-    return $self;
+    return $self->put('start'); # return $self->put('', { content => { action => 'start' } });
 };
 
 sub stop {
     my ($self) = @_;
-    $self->put('stop');
-    return $self;
+    return $self->put('stop'); # return $self->put('', { content => { action => 'start' } });
 };
 
 sub restart {
     my ($self) = @_;
-    $self->put('restart');
-    return $self;
+    return $self->put('restart'); # return $self->put('', { content => { action => 'restart' } });
 };
 
 sub host { # reroute (ex. member) to a host resource
@@ -216,15 +208,20 @@ sub host { # reroute (ex. member) to a host resource
     my $id = $self->{object}->{_id};
     my $base_path = "/hosts/$id";
     my $host = MongoDBTest::Orchestration::Hosts->new(base_path => $base_path, id => $id);
-    $host->status;
-    return $host;
+    return $host->status;
+};
+
+sub rs { # reroute (ex. member) to a rs resource
+    my ($self) = @_;
+    my $id = $self->{object}->{_id};
+    my $base_path = "/rs/$id";
+    my $rs = MongoDBTest::Orchestration::RS->new(base_path => $base_path, id => $id);
+    return $rs->status;
 };
 
 package MongoDBTest::Orchestration::Cluster;
 
 use Moo;
-use Types::Standard -types;
-use JSON;
 
 extends 'MongoDBTest::Orchestration::Base';
 
@@ -238,14 +235,10 @@ has id => (
     default => ''
 );
 
-sub BUILD {
-    my ($self) = @_;
-};
-
 sub status {
     my ($self) = @_;
     $self->get;
-    if ($self->{response}->{status} eq '200') {
+    if ($self->ok) {
         $self->object($self->{parsed_response});
         $self->id($self->{object}->{id});
     }
@@ -256,13 +249,10 @@ sub start {
     my ($self) = @_;
     if (!$self->status->ok) {
         $self->put('', {content => $self->request_content});
-        if ($self->{response}->{status} eq '200') {
-            $self->object($self->parsed_response);
+        if ($self->ok) {
+            $self->object($self->{parsed_response});
             $self->id($self->{object}->{id});
         }
-    }
-    else {
-        #$self->put;
     }
     return $self;
 };
@@ -271,31 +261,27 @@ sub stop {
     my ($self) = @_;
     if ($self->status->ok) {
         $self->delete;
-        if ($self->{response}->{status} eq '204') {
+        if ($self->ok) {
             #$self->object({});
         }
     }
     return $self;
 };
 
-sub host {
+sub component {
     my ($self, $resource, $host_info, $id_key) = @_;
     my $base_path = (($resource =~ qr{^/}) ? '' : "$self->{base_path}/") . "$resource/$host_info->{$id_key}";
     return MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $host_info);
 };
 
-sub hosts {
+sub components {
     my ($self, $get, $resource, $id_key) = @_;
     my $base_path = "$self->{base_path}/$get";
-    my $http_request = MongoDBTest::Orchestration::Base->new(base_path => $base_path);
-    $http_request->get;
-    if ($http_request->ok) {
-        return map { $self->host($resource, $_, $id_key) } @{$http_request->parsed_response};
-    }
-    else {
-        my @empty;
-        return @empty;
-    }
+    my $http_request = MongoDBTest::Orchestration::Base->new(base_path => $base_path)->get;
+    my @empty;
+    return ($http_request->ok) ?
+        map { $self->component($resource, $_, $id_key) } @{$http_request->parsed_response} :
+        @empty;
 };
 
 package MongoDBTest::Orchestration::Hosts;
@@ -306,49 +292,42 @@ extends 'MongoDBTest::Orchestration::Cluster';
 
 sub host {
     my ($self) = @_;
-    my $base_path = $self->{base_path};
-    return MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $self->object);
+    return MongoDBTest::Orchestration::Host->new(base_path => $self->base_path, object => $self->object);
 };
 
 package MongoDBTest::Orchestration::RS;
 
 use Moo;
-use HTTP::Tiny;
-use JSON;
 
 extends 'MongoDBTest::Orchestration::Cluster';
 
 sub members {
     my ($self) = @_;
-    return $self->hosts('members', 'members', '_id'); # host_id
+    return $self->components('members', 'members', '_id'); # host_id
 }
 
 sub primary {
     my ($self) = @_;
     my $base_path = "$self->{base_path}/primary";
-    my $http_request = MongoDBTest::Orchestration::Base->new(base_path => $base_path);
-    $http_request->get;
-    if ($http_request->ok) {
-        return MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $http_request->parsed_response)
-    }
-    else {
-        return undef;
-    }
+    my $http_request = MongoDBTest::Orchestration::Base->new(base_path => $base_path)->get;
+    return ($http_request->ok) ?
+        MongoDBTest::Orchestration::Host->new(base_path => $base_path, object => $http_request->parsed_response) :
+        undef;
 };
 
 sub secondaries {
     my ($self) = @_;
-    return $self->hosts('secondaries', 'members', '_id'); # host_id
+    return $self->components('secondaries', 'members', '_id'); # host_id
 };
 
 sub arbiters {
     my ($self) = @_;
-    return $self->hosts('arbiters', 'members', '_id'); # host_id
+    return $self->components('arbiters', 'members', '_id'); # host_id
 };
 
 sub hidden {
     my ($self) = @_;
-    return $self->hosts('hidden', 'members', '_id'); # host_id
+    return $self->components('hidden', 'members', '_id'); # host_id
 };
 
 package MongoDBTest::Orchestration::SH;
@@ -359,17 +338,17 @@ extends 'MongoDBTest::Orchestration::Cluster';
 
 sub members {
     my ($self) = @_;
-    return $self->hosts('members', 'members', 'id');
+    return $self->components('members', 'members', 'id');
 }
 
 sub configservers {
     my ($self) = @_;
-    return $self->hosts('configservers', '/hosts', 'id');
+    return $self->components('configservers', '/hosts', 'id');
 }
 
 sub routers {
     my ($self) = @_;
-    return $self->hosts('routers', '/hosts', 'id');
+    return $self->components('routers', '/hosts', 'id');
 }
 
 1;
