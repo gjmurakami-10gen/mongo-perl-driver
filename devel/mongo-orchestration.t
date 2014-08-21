@@ -28,6 +28,7 @@ subtest 'Base http_request method' => sub {
     my $base = MongoDBTest::Orchestration::Base->new;
     $base->get;
     is($base->{response}->{status}, '200', "mongo-orchestration service at $base->{base_uri}") or done_testing, exit;
+    ok($base->ok);
 };
 
 subtest 'Base get method' => sub {
@@ -36,12 +37,12 @@ subtest 'Base get method' => sub {
     is($base->{response}->{status}, '200');
     is($base->{parsed_response}->{service}, 'mongo-orchestration');
     is($base->{response}->{reason}, 'OK');
-    like($base->message_summary, qr/^GET .* OK, .* JSON:/, 'Base message_summary')
+    like($base->message_summary, qr/^GET .* OK, .* JSON:/)
 };
 
 my $standalone_config = {
     orchestration => 'hosts',
-    post_data => {
+    request_content => {
         id => 'standalone',
         name => 'mongod',
         procParams => {
@@ -70,26 +71,26 @@ subtest 'Cluster/Hosts start, status and stop methods' => sub {
     $cluster->stop; # force stop
 
     $cluster->start;
-    like($cluster->message_summary, qr{^POST /hosts, 200 OK, response JSON: });
-    is($cluster->{object}->{id}, 'standalone');
+    like($cluster->message_summary, qr{PUT /hosts/[-\w]+, 200 OK, response JSON: });
+    like($cluster->{object}->{id}, qr{[-\w]+});
 
     $cluster->start; # start for already started
-    like($cluster->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
-    is($cluster->{object}->{id}, 'standalone');
+    like($cluster->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
+    like($cluster->{object}->{id}, qr{[-\w]+});
 
     $cluster->status; # status for started
-    like($cluster->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
+    like($cluster->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
 
     #print "uri: $cluster->{object}->{uri}\n";
 
     $cluster->stop;
-    is($cluster->message_summary, 'DELETE /hosts/standalone, 204 No Content');
+    like($cluster->message_summary, qr{DELETE /hosts/[-\w]+, 204 No Content});
 
     $cluster->stop; # stop for already stopped
-    is($cluster->message_summary, 'GET /hosts/standalone, 404 Not Found');
+    like($cluster->message_summary, qr{GET /hosts/[-\w]+, 404 Not Found});
 
     $cluster->status; # status for stopped
-    is($cluster->message_summary, 'GET /hosts/standalone, 404 Not Found');
+    like($cluster->message_summary, qr{GET /hosts/[-\w]+, 404 Not Found});
 
     #print "@{[$cluster->message_summary]}\n";
 };
@@ -101,31 +102,31 @@ subtest 'Cluster/Hosts host method object with status, start, stop and restart m
     $cluster->start;
     my $host = $cluster->host;
     ok($host->isa('MongoDBTest::Orchestration::Host'));
-    is($host->base_path, '/hosts/standalone');
-    is($host->{object}->{id}, 'standalone');
+    like($host->base_path, qr{/hosts/[-\w]+});
+    like($host->{object}->{id}, qr{[-\w]+});
 
     $host->status;
-    like($host->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
-    is($host->{object}->{id}, 'standalone');
+    like($host->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
+    like($host->{object}->{id}, qr{[-\w]+});
 
     $host->stop;
-    is($host->message_summary, 'PUT /hosts/standalone/stop, 200 OK');
+    like($host->message_summary, qr{PUT /hosts/[-\w]+/stop, 200 OK});
 
     $host->status; # TODO - need status for no process
-    like($host->message_summary, qr{GET /hosts/standalone, 200 OK, response JSON: });
+    like($host->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
 
     $host->start;
-    is($host->message_summary, 'PUT /hosts/standalone/start, 200 OK');
+    like($host->message_summary, qr{PUT /hosts/[-\w]+/start, 200 OK});
 
     $host->restart;
-    is($host->message_summary, 'PUT /hosts/standalone/restart, 200 OK');
+    like($host->message_summary, qr{PUT /hosts/[-\w]+/restart, 200 OK});
 
     $cluster->stop;
 };
 
 my $replicaset_config = {
     orchestration => "rs",
-    post_data => {
+    request_content => {
         id => "repl0",
         members => [
             {
@@ -177,6 +178,7 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
 
     my @servers;
     @servers = $cluster->members;
+    is(scalar(@servers), 3);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
         like($_->{base_path}, qr{^/rs/repl0/members/});
@@ -190,6 +192,7 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
     ok(exists($primary->{object}->{uri}));
 
     @servers = $cluster->secondaries;
+    is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
         like($_->{base_path}, qr{^/rs/repl0/members/});
@@ -197,6 +200,7 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
     }
 
     @servers = $cluster->arbiters;
+    is(scalar(@servers), 0);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
         like($_->{base_path}, qr{^/rs/repl0/members/});
@@ -204,6 +208,7 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
     }
 
     @servers = $cluster->hidden;
+    is(scalar(@servers), 0);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
         like($_->{base_path}, qr{^/rs/repl0/members/});
@@ -216,7 +221,7 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
 
 my $sharded_configuration = {
     orchestration => "sh",
-    post_data => {
+    request_content => {
         id => "shard_cluster_1",
         configsvrs => [
             {
@@ -256,6 +261,7 @@ subtest 'Cluster/SH with members, configservers, routers' => sub {
 
     my @servers;
     @servers = $cluster->members;
+    is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
         like($_->{base_path}, qr{^/sh/shard_cluster_1/members/sh});
@@ -263,16 +269,18 @@ subtest 'Cluster/SH with members, configservers, routers' => sub {
     }
 
     @servers = $cluster->configservers;
+    is(scalar(@servers), 1);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/sh/shard_cluster_1/hosts/});
+        like($_->{base_path}, qr{^/hosts/});
         ok(exists($_->{object}->{id}));
     }
 
     @servers = $cluster->routers;
+    is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/sh/shard_cluster_1/hosts/});
+        like($_->{base_path}, qr{^/hosts/});
         ok(exists($_->{object}->{id}));
     }
 
@@ -281,21 +289,21 @@ subtest 'Cluster/SH with members, configservers, routers' => sub {
 
 my $hosts_preset_config = {
     orchestration => 'hosts',
-    post_data => {
+    request_content => {
         preset => 'basic.json',
     }
 };
 
 my $rs_preset_config = {
     orchestration => 'rs',
-    post_data => {
+    request_content => {
         preset => 'basic.json',
     }
 };
 
 my $sh_preset_config = {
     orchestration => 'sh',
-    post_data => {
+    request_content => {
         preset => 'basic.json',
     }
 };
@@ -306,11 +314,10 @@ subtest 'Service configure preset Cluster' => sub {
     foreach (@preset_configs) {
         my $cluster = $service->configure($_);
         $cluster->status;
-        ok(!defined($cluster->id));
         $cluster->start;
         ok(defined($cluster->id));
         is($cluster->{object}->{orchestration}, $_->{orchestration});
-        #print "preset $cluster->{object}->{orchestration}/$_->{post_data}->{preset}, id: $cluster->{id}\n";
+        #print "preset $cluster->{object}->{orchestration}/$_->{request_content}->{preset}, id: $cluster->{id}\n";
         $cluster->stop;
     }
 };

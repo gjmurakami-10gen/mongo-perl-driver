@@ -43,7 +43,7 @@ unless ( $cluster_type && $preset && @command ) {
 
 my $configuration = {
     orchestration => $cluster_type,
-    post_data => {
+    request_content => {
         preset => $preset
     }
 };
