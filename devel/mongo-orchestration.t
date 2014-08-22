@@ -184,7 +184,7 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
 
     my $primary = $cluster->primary;
     ok($primary->isa('MongoDBTest::Orchestration::Host'));
-    like($primary->{base_path}, qr{^/rs/repl0/primary});
+    like($primary->{base_path}, qr{^/rs/repl0/members/});
     ok(exists($primary->{object}->{host_id}));
     ok(exists($primary->{object}->{uri}));
 
