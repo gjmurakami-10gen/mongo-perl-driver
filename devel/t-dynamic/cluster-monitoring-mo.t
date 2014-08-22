@@ -30,7 +30,6 @@ use Data::Dumper;
 # This is an investigation of the cluster monitoring test spec, it may be discarded for something leaner.
 
 my $orch = MongoDBTest::Orchestration::Service->new;
-$orch->get;
 
 subtest 'Mongo orchestration service required' => sub {
     is($orch->{response}->{status}, '200', "mongo-orchestration service at $orch->{base_uri}") or done_testing, exit;
@@ -38,7 +37,6 @@ subtest 'Mongo orchestration service required' => sub {
 
 my $standalone_config = { orchestration => 'hosts', request_content => { preset => 'basic.json', id => 'standalone_cmt'} };
 my $standalone = $orch->configure($standalone_config);
-$standalone->start;
 
 subtest 'Connect to standalone' => sub {
     SKIP: {
@@ -108,9 +106,39 @@ $standalone->stop;
 
 # Sharded scenarios
 
-my $sharded_cluster_config = { orchestration => 'sh', request_content => { preset => 'basic.json', id => 'sharded_cluster_cmt' } };
-my $sharded_cluster = $orch->configure($sharded_cluster_config);
-$sharded_cluster->start;
+
+my $sharded_replica_set_configuration = {
+    orchestration => "sh",
+    request_content => {
+        id => "shard_cluster_2",
+        configsvrs => [
+            {
+            }
+        ],
+        members => [
+            {
+                id => "sh1",
+                shardParams => {
+                    members => [{},{},{}]
+                }
+            },
+            {
+                id => "sh2",
+                shardParams => {
+                    members => [{},{},{}]
+                }
+            }
+        ],
+        routers => [
+            {
+            },
+            {
+            }
+        ]
+    }
+};
+
+my $sharded_cluster = $orch->configure($sharded_replica_set_configuration);
 
 subtest 'Multiple mongoses' => sub {
     # 1. A and B are mongoses.
@@ -130,34 +158,34 @@ subtest 'Multiple mongoses' => sub {
 subtest 'Non-mongos is removed' => sub {
     # 1. A is a mongos, B is primary.
     my ($seed_a, $seed_c) = split(/,/, $sharded_cluster->{object}->{uri});
-    print Dumper($sharded_cluster->{object});
-    my @members = $sharded_cluster->members;
-    print Dumper(@members);
-    my $member_b = $members[0]->get;
-    print Dumper($member_b);
-    my $base_path = "/hosts/$member_b->{content}->{_id}";
-    my $host_b = MongoDBTest::Orchestration::Hosts->new(base_path => $base_path);
-    $host_b->get;
-    print Dumper($host_b);
-    my $seed_b = $sharded_cluster->{object};
+    my @shards = $sharded_cluster->shards;
+    my $primary = $shards[0]->primary;
+    my $seed_b = $primary->object->{uri};
+
     # 2. Client is configured with seeds A and B.
     my $seed = "mongodb://$seed_a,$seed_b";
+    print "seed: $seed\n";
+    my $client = MongoDB::MongoClient->new(host => $seed);
+
     # 3. Initial ClusterType is Unknown or Sharded, depending on the driver.
     # 4. First ismaster response is from A: { ok: 1, ismaster: true, msg: 'isdbgrid' }
     # 5. Second response is from B: { ok: 1, ismaster: true, hosts: ['B:27017'], setName: 'rs' }
     # Expected: client knows A is ServerType Mongos, B is removed. ClusterType is Sharded.
+    $client->{server} = {$seed_a => {cluster_type => 'implementation pending'}, $seed_b => {cluster_type => 'implementation pending'}};
+    is($client->{cluster_type}, 'sharded', 'Expected: ClusterType is Sharded');
+    is($client->{server}->{$seed_a}->{server_type}, 'mongos', 'Expected: client knows A is ServerType Mongos');
+    is($client->{server}->{$seed_b}->{cluster_type}, undef, 'Expected: B is removed');
     ok(0, 'implementation or test incomplete');
 };
 
-done_testing, exit;
-
 $sharded_cluster->stop;
+
+done_testing, exit;
 
 # Replica set scenarios
 
 my $replica_set_config = { orchestration => 'rs', request_content => { preset => 'basic.json', id => 'replica_set_cmt' } };
 my $replica_set = $orch->configure($replica_set_config);
-$replica_set->start;
 
 subtest 'RSGhost' => sub {
     ok(0, 'implementation or test incomplete');

@@ -178,43 +178,41 @@ subtest 'Cluster/RS with members, primary, secondaries, arbiters and hidden' => 
     is(scalar(@servers), 3);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/rs/repl0/members/});
-        ok(exists($_->{object}->{host_id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));
     }
 
     my $primary = $cluster->primary;
     ok($primary->isa('MongoDBTest::Orchestration::Host'));
-    like($primary->{base_path}, qr{^/rs/repl0/members/});
-    ok(exists($primary->{object}->{host_id}));
     ok(exists($primary->{object}->{uri}));
+    ok(exists($primary->{object}->{procInfo}));
 
     @servers = $cluster->secondaries;
     is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/rs/repl0/members/});
-        ok(exists($_->{object}->{host_id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));
     }
 
     @servers = $cluster->arbiters;
     is(scalar(@servers), 0);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/rs/repl0/members/});
-        ok(exists($_->{object}->{host_id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));
     }
 
     @servers = $cluster->hidden;
     is(scalar(@servers), 0);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/rs/repl0/members/});
-        ok(exists($_->{object}->{host_id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));;
     }
 
     $cluster->stop;
 };
-
 
 my $sharded_configuration = {
     orchestration => "sh",
@@ -249,34 +247,43 @@ my $sharded_configuration = {
     }
 };
 
-subtest 'Cluster/SH with members, configservers, routers' => sub {
+subtest 'Cluster/SH with host members, configservers, routers' => sub {
     my $service = MongoDBTest::Orchestration::Service->new;
     my $cluster = $service->configure($sharded_configuration);
     ok($cluster->isa('MongoDBTest::Orchestration::SH'));
+
+    my @shards = $cluster->shards;
+    is(scalar(@shards), 2);
+    foreach (@shards) {
+        ok($_->isa('MongoDBTest::Orchestration::Hosts'));
+        is($_->{object}->{orchestration}, 'hosts');
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));
+    }
 
     my @servers;
     @servers = $cluster->members;
     is(scalar(@servers), 2);
     foreach (@servers) {
-        ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/sh/shard_cluster_1/members/sh});
-        ok(exists($_->{object}->{id}));
+        ok($_->isa('MongoDBTest::Orchestration::Resource'));
+        like($_->{base_path}, qr{^/sh/shard_cluster_1/members/});
+        ok(exists($_->{object}->{isHost}));
     }
 
     @servers = $cluster->configservers;
     is(scalar(@servers), 1);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/hosts/});
-        ok(exists($_->{object}->{id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));;
     }
 
     @servers = $cluster->routers;
     is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/hosts/});
-        ok(exists($_->{object}->{id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));;
     }
 
     $cluster->stop;
@@ -318,29 +325,38 @@ subtest 'Cluster/SH with replica-set members, configservers, routers' => sub {
     my $cluster = $service->configure($sharded_replica_set_configuration);
     ok($cluster->isa('MongoDBTest::Orchestration::SH'));
 
+    my @shards = $cluster->shards;
+    is(scalar(@shards), 2);
+    foreach (@shards) {
+        ok($_->isa('MongoDBTest::Orchestration::RS'));
+        is($_->{object}->{orchestration}, 'rs');
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{members}));
+    }
+
     my @servers;
     @servers = $cluster->members;
     is(scalar(@servers), 2);
     foreach (@servers) {
-        ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/sh/shard_cluster_2/members/sh});
-        ok(exists($_->{object}->{id}));
+        ok($_->isa('MongoDBTest::Orchestration::Resource'));
+        like($_->{base_path}, qr{^/sh/shard_cluster_2/members/});
+        ok(exists($_->{object}->{isReplicaSet}));
     }
 
     @servers = $cluster->configservers;
     is(scalar(@servers), 1);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/hosts/});
-        ok(exists($_->{object}->{id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));;
     }
 
     @servers = $cluster->routers;
     is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Host'));
-        like($_->{base_path}, qr{^/hosts/});
-        ok(exists($_->{object}->{id}));
+        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{procInfo}));;
     }
 
     $cluster->stop;
@@ -349,6 +365,7 @@ subtest 'Cluster/SH with replica-set members, configservers, routers' => sub {
 my $hosts_preset_config = {
     orchestration => 'hosts',
     request_content => {
+        id => 'host_preset_1',
         preset => 'basic.json',
     }
 };
@@ -356,6 +373,7 @@ my $hosts_preset_config = {
 my $rs_preset_config = {
     orchestration => 'rs',
     request_content => {
+        id => 'rs_preset_1',
         preset => 'basic.json',
     }
 };
@@ -363,6 +381,7 @@ my $rs_preset_config = {
 my $sh_preset_config = {
     orchestration => 'sh',
     request_content => {
+        id => 'sh_preset_1',
         preset => 'basic.json',
     }
 };
@@ -371,6 +390,16 @@ subtest 'Service configure preset Cluster' => sub {
     my $service = MongoDBTest::Orchestration::Service->new;
     my @preset_configs = ($hosts_preset_config, $rs_preset_config, $sh_preset_config);
     foreach (@preset_configs) {
+        my $cluster = $service->configure($_);
+        ok(defined($cluster->id));
+        is($cluster->{object}->{orchestration}, $_->{orchestration});
+        #print "preset $cluster->{object}->{orchestration}/$_->{request_content}->{preset}, id: $cluster->{id}\n";
+        $cluster->stop;
+    }
+
+    # repeat with id deleted
+    foreach (@preset_configs) {
+        delete($_->{request_content}->{id});
         my $cluster = $service->configure($_);
         ok(defined($cluster->id));
         is($cluster->{object}->{orchestration}, $_->{orchestration});
