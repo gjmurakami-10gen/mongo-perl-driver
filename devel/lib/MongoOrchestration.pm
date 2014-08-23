@@ -137,6 +137,11 @@ use Moo;
 
 extends 'MongoDBTest::Orchestration::Base';
 
+has request_content => (
+    is => 'rw',
+    default => sub { return {}; }
+);
+
 has object => (
     is => 'rw',
     default => sub { return {}; }
@@ -158,8 +163,7 @@ sub sub_resource {
     my ($self, $sub_class, $path) = @_;
     my $base_path = ::cat_path($self->base_path, $path);
     my $class = 'MongoDBTest::Orchestration::' . $sub_class;
-    my $resource = $class->new(base_path => $base_path);
-    return $resource->get;
+    return $class->new(base_path => $base_path);
 }
 
 package MongoDBTest::Orchestration::Service;
@@ -170,7 +174,7 @@ extends 'MongoDBTest::Orchestration::Resource';
 
 use constant {
     VERSION_REQUIRED => '0.9',
-    ORCHESTRATION_CLASS => { 'hosts' => 'Hosts', 'rs' => 'RS', 'sh' => 'SH' }
+    ORCHESTRATION_CLASS => { 'hosts' => 'Server', 'rs' => 'ReplicaSet', 'sh' => 'ShardedCluster' }
 };
 
 sub BUILD {
@@ -197,49 +201,8 @@ sub configure {
     }
     my $class = 'MongoDBTest::Orchestration::' . ORCHESTRATION_CLASS->{$orchestration};
     my $base_path = "/$orchestration/$id";
-    my $cluster = $class->new(base_path => $base_path, request_content => $request_content, id => $id);
+    my $cluster = $class->new(base_path => $base_path, request_content => $request_content);
     return $cluster->start;
-}
-
-package MongoDBTest::Orchestration::Host;
-
-use Moo;
-
-extends 'MongoDBTest::Orchestration::Resource';
-
-sub status {
-    my ($self) = @_;
-    $self->get;
-    return $self;
-}
-
-sub start {
-    my ($self) = @_;
-    return $self->put('start'); # return $self->put('', { content => { action => 'start' } });
-}
-
-sub stop {
-    my ($self) = @_;
-    return $self->put('stop'); # return $self->put('', { content => { action => 'start' } });
-}
-
-sub restart {
-    my ($self) = @_;
-    return $self->put('restart'); # return $self->put('', { content => { action => 'restart' } });
-}
-
-sub host { # reroute (ex. member) to a host resource
-    my ($self) = @_;
-    my $id = $self->{object}->{_id};
-    my $base_path = "/hosts/$id";
-    return MongoDBTest::Orchestration::Hosts->new(base_path => $base_path, id => $id);
-}
-
-sub rs { # reroute (ex. member) to a rs resource
-    my ($self) = @_;
-    my $id = $self->{object}->{_id};
-    my $base_path = "/rs/$id";
-    return MongoDBTest::Orchestration::RS->new(base_path => $base_path, id => $id);
 }
 
 package MongoDBTest::Orchestration::Cluster;
@@ -248,24 +211,9 @@ use Moo;
 
 extends 'MongoDBTest::Orchestration::Resource';
 
-has request_content => (
-    is => 'rw',
-    default => sub { return {}; }
-);
-
-has id => (
-    is => 'rw',
-    default => ''
-);
-
 sub status {
     my ($self) = @_;
-    $self->get;
-    if ($self->ok) {
-        $self->object($self->{parsed_response});
-        $self->id($self->{object}->{id});
-    }
-    return $self;
+    return $self->get;
 }
 
 sub start {
@@ -274,7 +222,6 @@ sub start {
         $self->put('', {content => $self->request_content});
         if ($self->ok) {
             $self->object($self->{parsed_response});
-            $self->id($self->{object}->{id});
         }
     }
     return $self;
@@ -307,18 +254,14 @@ sub components {
         @empty;
 }
 
-package MongoDBTest::Orchestration::Hosts;
+package MongoDBTest::Orchestration::Server;
 
 use Moo;
 
 extends 'MongoDBTest::Orchestration::Cluster';
 
-sub host {
-    my ($self) = @_;
-    return MongoDBTest::Orchestration::Host->new(base_path => $self->base_path, object => $self->object);
-}
 
-package MongoDBTest::Orchestration::RS;
+package MongoDBTest::Orchestration::ReplicaSet;
 
 use Moo;
 
@@ -326,33 +269,33 @@ extends 'MongoDBTest::Orchestration::Cluster';
 
 sub members {
     my ($self) = @_;
-    return $self->components('members', 'Host', '/hosts', 'host_id'); # host_id
+    return $self->components('members', 'Server', '/hosts', 'host_id'); # host_id
 }
 
 sub primary {
     my ($self) = @_;
     my $sub_resource = $self->sub_resource('Resource', 'primary');
     return ($sub_resource->ok) ?
-        $self->component('Host', '/hosts', $sub_resource->object, 'host_id') :
+        $self->component('Server', '/hosts', $sub_resource->object, 'host_id') :
         undef;
 }
 
 sub secondaries {
     my ($self) = @_;
-    return $self->components('secondaries', 'Host', '/hosts', 'host_id'); # host_id
+    return $self->components('secondaries', 'Server', '/hosts', 'host_id'); # host_id
 }
 
 sub arbiters {
     my ($self) = @_;
-    return $self->components('arbiters', 'Host', '/hosts', 'host_id'); # host_id
+    return $self->components('arbiters', 'Server', '/hosts', 'host_id'); # host_id
 }
 
 sub hidden {
     my ($self) = @_;
-    return $self->components('hidden', 'Host', '/hosts', 'host_id'); # host_id
+    return $self->components('hidden', 'Server', '/hosts', 'host_id'); # host_id
 }
 
-package MongoDBTest::Orchestration::SH;
+package MongoDBTest::Orchestration::ShardedCluster;
 
 use Moo;
 
@@ -363,11 +306,11 @@ sub shard {
     my $base_path;
     if ($object->{isReplicaSet}) {
         $base_path = "/rs/$object->{_id}",
-        return MongoDBTest::Orchestration::RS->new(base_path => $base_path);
+        return MongoDBTest::Orchestration::ReplicaSet->new(base_path => $base_path);
     }
     if ($object->{isHost}) {
         $base_path = "/hosts/$object->{_id}",
-        return MongoDBTest::Orchestration::Hosts->new(base_path => $base_path);
+        return MongoDBTest::Orchestration::Server->new(base_path => $base_path);
     }
     return undef;
 }
@@ -386,12 +329,12 @@ sub members {
 
 sub configservers {
     my ($self) = @_;
-    return $self->components('configservers', 'Host', '/hosts', 'id');
+    return $self->components('configservers', 'Server', '/hosts', 'id');
 }
 
 sub routers {
     my ($self) = @_;
-    return $self->components('routers', 'Host', '/hosts', 'id');
+    return $self->components('routers', 'Server', '/hosts', 'id');
 }
 
 1;
