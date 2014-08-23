@@ -63,33 +63,42 @@ subtest 'Service configure Cluster/Server' => sub {
     ok($cluster->isa('MongoDBTest::Orchestration::Server'));
 };
 
-subtest 'Cluster/Server start, status and stop methods' => sub {
+subtest 'Cluster/Server init, status, stop, start, restart and destroy methods' => sub {
     my $service = MongoDBTest::Orchestration::Service->new;
     my $cluster = $service->configure($standalone_config);
     ok($cluster->isa('MongoDBTest::Orchestration::Server'));
 
-    $cluster->stop; # force stop
+    $cluster->destroy; # force destroy
 
-    $cluster->start;
+    $cluster->init;
     like($cluster->message_summary, qr{PUT /hosts/[-\w]+, 200 OK, response JSON: });
     like($cluster->{object}->{id}, qr{[-\w]+});
 
-    $cluster->start; # start for already started
+    $cluster->init; # init for already init'ed
     like($cluster->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
     like($cluster->{object}->{id}, qr{[-\w]+});
 
-    $cluster->status; # status for started
+    $cluster->status; # status for init'ed
     like($cluster->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
 
     #print "uri: $cluster->{object}->{uri}\n";
 
     $cluster->stop;
+    like($cluster->message_summary, qr{POST /hosts/[-\w]+, 200 OK});
+
+    $cluster->start;
+    like($cluster->message_summary, qr{POST /hosts/[-\w]+, 200 OK});
+
+    $cluster->restart;
+    like($cluster->message_summary, qr{POST /hosts/[-\w]+, 200 OK});
+
+    $cluster->destroy;
     like($cluster->message_summary, qr{DELETE /hosts/[-\w]+, 204 No Content});
 
-    $cluster->stop; # stop for already stopped
+    $cluster->destroy; # destroy for already destroyed
     like($cluster->message_summary, qr{GET /hosts/[-\w]+, 404 Not Found});
 
-    $cluster->status; # status for stopped
+    $cluster->status; # status for destroyed
     like($cluster->message_summary, qr{GET /hosts/[-\w]+, 404 Not Found});
 
     #print "@{[$cluster->message_summary]}\n";
@@ -183,7 +192,7 @@ subtest 'Cluster/ReplicaSet with members, primary, secondaries, arbiters and hid
         ok(exists($_->{object}->{procInfo}));;
     }
 
-    $cluster->stop;
+    $cluster->destroy;
 };
 
 my $sharded_configuration = {
@@ -258,7 +267,7 @@ subtest 'Cluster/ShardedCluster with host members, configservers, routers' => su
         ok(exists($_->{object}->{procInfo}));;
     }
 
-    $cluster->stop;
+    $cluster->destroy;
 };
 
 my $sharded_replica_set_configuration = {
@@ -331,7 +340,7 @@ subtest 'Cluster/ShardedCluster with replica-set members, configservers, routers
         ok(exists($_->{object}->{procInfo}));;
     }
 
-    $cluster->stop;
+    $cluster->destroy;
 };
 
 my $hosts_preset_config = {
@@ -365,7 +374,7 @@ subtest 'Service configure preset Cluster' => sub {
         my $cluster = $service->configure($_);
         is($cluster->{object}->{orchestration}, $_->{orchestration});
         #print "preset $cluster->{object}->{orchestration}/$_->{request_content}->{preset}, id: $cluster->{id}\n";
-        $cluster->stop;
+        $cluster->destroy;
     }
 
     # repeat with id deleted
@@ -374,7 +383,7 @@ subtest 'Service configure preset Cluster' => sub {
         my $cluster = $service->configure($_);
         is($cluster->{object}->{orchestration}, $_->{orchestration});
         #print "preset $cluster->{object}->{orchestration}/$_->{request_content}->{preset}, id: $cluster->{id}\n";
-        $cluster->stop;
+        $cluster->destroy;
     }
 };
 

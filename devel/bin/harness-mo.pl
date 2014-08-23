@@ -51,7 +51,6 @@ my $configuration = {
 
 my $orch = MongoDBTest::Orchestration::Service->new;
 my $cluster = $orch->configure($configuration);
-$cluster->start;
 
 die "cluster start error - @{[$cluster->message_summary]}\n" if $cluster->{response}->{status} ne '200';
 
@@ -63,7 +62,7 @@ my $exit_val = system(@command);
 my $signal = $exit_val & 127;
 $exit_val = $exit_val >> 8;
 
-$cluster->stop;
+$cluster->destroy;
 
 exit( $signal || $exit_val );
 

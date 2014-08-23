@@ -62,7 +62,7 @@ subtest 'Handle a not-ok ismaster response' => sub {
     ok(1, 'not applicable');
 };
 
-$standalone->stop;
+$standalone->destroy;
 
 subtest 'Cluster unavailable' => sub {
     # A MongoClient can be constructed without an exception, even with all seeds unavailable.
@@ -79,7 +79,7 @@ subtest 'Cluster unavailable' => sub {
     ok(0, 'implementation or test incomplete');
 };
 
-$standalone->start;
+$standalone->init;
 
 subtest 'Standalone removed from multi-server cluster' => sub {
     # 1. A is a standalone.
@@ -102,7 +102,7 @@ subtest 'Standalone removed from multi-server cluster' => sub {
     }
 };
 
-$standalone->stop;
+$standalone->destroy;
 
 # Sharded scenarios
 
@@ -178,7 +178,7 @@ subtest 'Non-mongos is removed' => sub {
     ok(0, 'implementation or test incomplete');
 };
 
-$sharded_cluster->stop;
+$sharded_cluster->destroy;
 
 done_testing, exit;
 
@@ -273,7 +273,7 @@ subtest 'Count without slaveOk bit' => sub {
     ok(0, 'implementation or test incomplete');
 };
 
-$replica_set->stop;
+$replica_set->destroy;
 
 done_testing;
 

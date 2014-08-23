@@ -202,7 +202,7 @@ sub configure {
     my $class = 'MongoDBTest::Orchestration::' . ORCHESTRATION_CLASS->{$orchestration};
     my $base_path = "/$orchestration/$id";
     my $cluster = $class->new(base_path => $base_path, request_content => $request_content);
-    return $cluster->start;
+    return $cluster->init;
 }
 
 package MongoDBTest::Orchestration::Cluster;
@@ -216,18 +216,20 @@ sub status {
     return $self->get;
 }
 
-sub start {
+sub create {
     my ($self) = @_;
-    if (!$self->status->ok) {
-        $self->put('', {content => $self->request_content});
-        if ($self->ok) {
-            $self->object($self->{parsed_response});
-        }
-    }
+    $self->put('', {content => $self->request_content});
+    $self->object($self->{parsed_response}) if ($self->ok);
     return $self;
 }
 
-sub stop {
+sub init {
+    my ($self) = @_;
+    $self->create unless ($self->status->ok);
+    return $self;
+}
+
+sub destroy {
     my ($self) = @_;
     if ($self->status->ok) {
         $self->delete;
@@ -260,6 +262,20 @@ use Moo;
 
 extends 'MongoDBTest::Orchestration::Cluster';
 
+sub start {
+    my ($self) = @_;
+    return $self->post('', {content => {action => 'start'}});
+}
+
+sub stop {
+    my ($self) = @_;
+    return $self->post('', {content => {action => 'stop'}});
+}
+
+sub restart {
+    my ($self) = @_;
+    return $self->post('', {content => {action => 'restart'}});
+}
 
 package MongoDBTest::Orchestration::ReplicaSet;
 

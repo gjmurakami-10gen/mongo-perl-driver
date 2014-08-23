@@ -167,7 +167,7 @@ print Dumper($client);
 #insert
 #read
 
-$cluster->stop;
+$cluster->destroy;
 
 done_testing;
 
