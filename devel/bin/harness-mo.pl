@@ -54,7 +54,7 @@ my $cluster = $orch->configure($configuration);
 
 die "cluster start error - @{[$cluster->message_summary]}\n" if $cluster->{response}->{status} ne '200';
 
-$ENV{MONGOD} = "mongodb://$cluster->{object}->{uri}";
+$ENV{MONGOD} = $cluster->{object}->{mongodb_uri};
 say "MONGOD=".$ENV{MONGOD};
 
 say "@command";

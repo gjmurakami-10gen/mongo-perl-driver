@@ -152,7 +152,7 @@ my $sharded_replica_set_configuration = {
 };
 
 my $cluster = $orch->configure($replicaset_config);
-my $seed = "mongodb://$cluster->{object}->{uri}";
+my $seed = $cluster->{object}->{mongodb_uri};
 print "seed: $seed\n";
 my $client = MongoDB::MongoClient->new(host => $seed);
 

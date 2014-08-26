@@ -81,7 +81,7 @@ subtest 'Cluster/Server init, status, stop, start, restart and destroy methods' 
     $cluster->status; # status for init'ed
     like($cluster->message_summary, qr{GET /hosts/[-\w]+, 200 OK, response JSON: });
 
-    #print "uri: $cluster->{object}->{uri}\n";
+    #print "mongodb_uri: $cluster->{object}->{mongodb_uri}\n";
 
     $cluster->stop;
     like($cluster->message_summary, qr{POST /hosts/[-\w]+, 200 OK});
@@ -159,20 +159,20 @@ subtest 'Cluster/ReplicaSet with members, primary, secondaries, arbiters and hid
     is(scalar(@servers), 3);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));
     }
 
     my $primary = $cluster->primary;
     ok($primary->isa('MongoDBTest::Orchestration::Server'));
-    ok(exists($primary->{object}->{uri}));
+    ok(exists($primary->{object}->{mongodb_uri}));
     ok(exists($primary->{object}->{procInfo}));
 
     @servers = $cluster->secondaries;
     is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));
     }
 
@@ -180,7 +180,7 @@ subtest 'Cluster/ReplicaSet with members, primary, secondaries, arbiters and hid
     is(scalar(@servers), 0);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));
     }
 
@@ -188,7 +188,7 @@ subtest 'Cluster/ReplicaSet with members, primary, secondaries, arbiters and hid
     is(scalar(@servers), 0);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));;
     }
 
@@ -238,7 +238,7 @@ subtest 'Cluster/ShardedCluster with host members, configservers, routers' => su
     foreach (@shards) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
         is($_->{object}->{orchestration}, 'hosts');
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));
     }
 
@@ -255,7 +255,7 @@ subtest 'Cluster/ShardedCluster with host members, configservers, routers' => su
     is(scalar(@servers), 1);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));;
     }
 
@@ -263,7 +263,7 @@ subtest 'Cluster/ShardedCluster with host members, configservers, routers' => su
     is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));;
     }
 
@@ -311,7 +311,7 @@ subtest 'Cluster/ShardedCluster with replica-set members, configservers, routers
     foreach (@shards) {
         ok($_->isa('MongoDBTest::Orchestration::ReplicaSet'));
         is($_->{object}->{orchestration}, 'rs');
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{members}));
     }
 
@@ -328,7 +328,7 @@ subtest 'Cluster/ShardedCluster with replica-set members, configservers, routers
     is(scalar(@servers), 1);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));;
     }
 
@@ -336,7 +336,7 @@ subtest 'Cluster/ShardedCluster with replica-set members, configservers, routers
     is(scalar(@servers), 2);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
-        ok(exists($_->{object}->{uri}));
+        ok(exists($_->{object}->{mongodb_uri}));
         ok(exists($_->{object}->{procInfo}));;
     }
 
