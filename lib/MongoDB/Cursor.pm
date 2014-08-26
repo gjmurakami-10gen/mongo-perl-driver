@@ -24,9 +24,12 @@ our $VERSION = 'v0.704.4.1';
 
 use Moose;
 use MongoDB;
+use MongoDB::BSON;
 use MongoDB::Error;
+use MongoDB::_Protocol;
 use boolean;
 use Tie::IxHash;
+use Try::Tiny;
 use namespace::clean -except => 'meta';
 
 use constant {
@@ -324,8 +327,10 @@ sub _do_query {
         ($self->immortal << 4) |
         ($self->partial << 7);
 
+    my $bson_query = MongoDB::BSON::encode_bson( $self->_query, 0 );
+    my $bson_fields = MongoDB::BSON::encode_bson( $self->_fields, 0 ) if $self->_fields;
     my ($query, $info) = MongoDB::_Protocol::write_query(
-        $self->_ns, $opts, $self->_skip, $self->_limit || $self->_batch_size, $self->_query, $self->_fields
+        $self->_ns, $opts, $self->_skip, $self->_limit || $self->_batch_size, $bson_query, $bson_fields
     );
 
     if ( length($query) > $self->_client->_max_bson_wire_size ) {
@@ -365,6 +370,29 @@ sub _send_and_recv {
 sub _read_reply {
     my ($self, $reply, $request_id, $getmore) = @_;
     my $result = MongoDB::_Protocol::parse_reply($reply, $request_id, $self->_client);
+
+    my $doc_bson = $result->{docs};
+    my $client = $self->_client;
+    my $number_returned = $result->{number_returned};
+
+    my @documents;
+    for ( 1 .. $number_returned ) {
+        my $len = unpack( MongoDB::_Protocol::P_INT32(), substr( $doc_bson, 0, 4 ) );
+        if ( $len > length($doc_bson) ) {
+            Carp::croak("document in response was truncated");
+        }
+        push @documents, MongoDB::BSON::decode_bson( substr( $doc_bson, 0, $len, '' ), $client );
+    }
+
+    if ( @documents != $number_returned ) {
+        Carp::croak("unepxected number of documents");
+    }
+
+    if ( length($doc_bson) > 0 ) {
+        Carp::croak("unexpected extra data in response");
+    }
+
+    $result->{docs} = \@documents;
 
     if ( vec( $result->{response_flags}, MongoDB::_Protocol::QUERY_FAILURE(), 1 ) && $self->_ns !~ /\$cmd$/ ) {
         my $doc = $result->{docs}[0];
@@ -564,6 +592,8 @@ sub snapshot {
 =head2 hint
 
     my $cursor = $coll->query->hint({'x' => 1});
+    my $cursor = $coll->query->hint(['x', 1]);
+    my $cursor = $coll->query->hint('x_1');
 
 Force Mongo to use a specific index for a query.
 
@@ -572,9 +602,17 @@ Force Mongo to use a specific index for a query.
 sub hint {
     my ($self, $index) = @_;
     confess "cannot set hint after querying"
-	if $self->started_iterating;
-    confess 'not a hash reference'
-    	unless ref $index eq 'HASH' || ref $index eq 'Tie::IxHash';
+        if $self->started_iterating;
+
+    # $index must either be a string or a reference to an array, hash, or IxHash
+    if (ref $index eq 'ARRAY') {
+
+        $index = Tie::IxHash->new(@$index);
+
+    } elsif (ref $index && !(ref $index eq 'HASH' || ref $index eq 'Tie::IxHash')) {
+
+        confess 'not a hash reference';
+    }
 
     $self->_ensure_nested;
     $self->_query->STORE('$hint', $index);
@@ -649,11 +687,23 @@ sub count {
         $cmd->Push(skip => $self->_skip) if $self->_skip;
     }
 
-    my $result = $self->_client->get_database($db)->run_command($cmd);
+    if ($self->_query->EXISTS('$hint')) {
+        $cmd->Push(hint => $self->_query->FETCH('$hint'));
+    }
 
-    # returns "ns missing" if collection doesn't exist
-    return 0 unless ref $result eq 'HASH';
-    return $result->{'n'};
+    my $result;
+
+    try {
+        $result = $self->_client->get_database($db)->_try_run_command($cmd);
+    }
+    catch {
+
+        # if there was an error, check if it was the "ns missing" one that means the
+        # collection hasn't been created or a real error.
+        die $_ unless /^ns missing/;
+    };
+
+    return $result ? $result->{n} : 0;
 }
 
 
@@ -713,6 +763,10 @@ sub _get_more {
     my $reply = $self->_client->recv;
     # XXX should we blank out cursor if this fails?
     return $self->_read_reply($reply, $request_id, 1);
+}
+
+sub _unpack_docs {
+    my ($self, $data) = @_;
 }
 
 =head2 reset
