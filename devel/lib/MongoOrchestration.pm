@@ -174,7 +174,7 @@ extends 'MongoDBTest::Orchestration::Resource';
 
 use constant {
     VERSION_REQUIRED => '0.9',
-    ORCHESTRATION_CLASS => { 'hosts' => 'Server', 'rs' => 'ReplicaSet', 'sh' => 'ShardedCluster' }
+    ORCHESTRATION_CLASS => { 'servers' => 'Server', 'replica_sets' => 'ReplicaSet', 'sharded_clusters' => 'ShardedCluster' }
 };
 
 sub BUILD {
@@ -208,7 +208,7 @@ sub configure {
 package MongoDBTest::Orchestration::Cluster;
 
 use Moo;
-
+use Data::Dumper;
 extends 'MongoDBTest::Orchestration::Resource';
 
 sub status {
@@ -238,6 +238,15 @@ sub destroy {
         }
     }
     return $self;
+}
+
+sub servers {
+    my ($self, $get_resource) = @_;
+    my $sub_resource = $self->sub_resource('Resource', $get_resource);
+    my @empty;
+    return ($sub_resource->ok) ?
+        map { MongoDBTest::Orchestration::Server->new(base_path => $_->{uri}) } @{$sub_resource->object} :
+        @empty;
 }
 
 sub component {
@@ -283,32 +292,37 @@ use Moo;
 
 extends 'MongoDBTest::Orchestration::Cluster';
 
-sub members {
+sub member_resources {
     my ($self) = @_;
-    return $self->components('members', 'Server', '/hosts', 'host_id'); # host_id
+    return $self->components('members', 'Resource', 'members', 'member_id');
 }
 
 sub primary {
     my ($self) = @_;
     my $sub_resource = $self->sub_resource('Resource', 'primary');
     return ($sub_resource->ok) ?
-        $self->component('Server', '/hosts', $sub_resource->object, 'host_id') :
+        MongoDBTest::Orchestration::Server->new(base_path => $sub_resource->object->{uri}) :
         undef;
+}
+
+sub members {
+    my ($self) = @_;
+    return $self->servers('members');
 }
 
 sub secondaries {
     my ($self) = @_;
-    return $self->components('secondaries', 'Server', '/hosts', 'host_id'); # host_id
+    return $self->servers('secondaries');
 }
 
 sub arbiters {
     my ($self) = @_;
-    return $self->components('arbiters', 'Server', '/hosts', 'host_id'); # host_id
+    return $self->servers('arbiters');
 }
 
 sub hidden {
     my ($self) = @_;
-    return $self->components('hidden', 'Server', '/hosts', 'host_id'); # host_id
+    return $self->servers('hidden');
 }
 
 package MongoDBTest::Orchestration::ShardedCluster;
@@ -319,38 +333,31 @@ extends 'MongoDBTest::Orchestration::Cluster';
 
 sub shard {
     my ($self, $object) = @_;
-    my $base_path;
-    if ($object->{isReplicaSet}) {
-        $base_path = "/rs/$object->{_id}",
-        return MongoDBTest::Orchestration::ReplicaSet->new(base_path => $base_path);
-    }
-    if ($object->{isHost}) {
-        $base_path = "/hosts/$object->{_id}",
-        return MongoDBTest::Orchestration::Server->new(base_path => $base_path);
-    }
+    return MongoDBTest::Orchestration::ReplicaSet->new(base_path => $object->{uri}) if $object->{isReplicaSet};
+    return MongoDBTest::Orchestration::Server->new(base_path => $object->{uri}) if $object->{isServer};
     return undef;
+}
+
+sub shard_resources {
+    my ($self) = @_;
+    return $self->components('shards', 'Resource', 'shards', 'shard_id');
 }
 
 sub shards {
     my ($self) = @_;
-    my $members = $self->sub_resource('Resource', 'members');
+    my $members = $self->sub_resource('Resource', 'shards');
     my @empty;
     return ($members->ok) ? map { $self->shard($_) } @{$members->object} : @empty;
 }
 
-sub members {
-    my ($self) = @_;
-    return $self->components('members', 'Resource', 'members', 'id');
-}
-
 sub configservers {
     my ($self) = @_;
-    return $self->components('configservers', 'Server', '/hosts', 'id');
+    return $self->servers('configservers');
 }
 
 sub routers {
     my ($self) = @_;
-    return $self->components('routers', 'Server', '/hosts', 'id');
+    return $self->servers('routers');
 }
 
 1;

@@ -32,7 +32,7 @@ subtest 'Mongo orchestration service required' => sub {
 };
 
 my $standalone_config = {
-    orchestration => 'hosts',
+    orchestration => 'servers',
     request_content => {
         id => 'standalone_1',
         name => 'mongod',
@@ -43,7 +43,7 @@ my $standalone_config = {
 };
 
 my $replicaset_config = {
-    orchestration => "rs",
+    orchestration => "replica_sets",
     request_content => {
         id => "replica_set_1",
         members => [
@@ -88,14 +88,14 @@ my $replicaset_config = {
 };
 
 my $sharded_configuration = {
-    orchestration => "sh",
+    orchestration => "shard_clusters",
     request_content => {
         id => "shard_cluster_1",
         configsvrs => [
             {
             }
         ],
-        members => [
+        shards => [
             {
                 id => "sh1",
                 shardParams => {
@@ -121,14 +121,14 @@ my $sharded_configuration = {
 };
 
 my $sharded_replica_set_configuration = {
-    orchestration => "sh",
+    orchestration => "shard_clusters",
     request_content => {
         id => "shard_cluster_2",
         configsvrs => [
             {
             }
         ],
-        members => [
+        shards => [
             {
                 id => "sh1",
                 shardParams => {
