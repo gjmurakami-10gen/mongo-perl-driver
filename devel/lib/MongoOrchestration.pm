@@ -350,9 +350,9 @@ sub shards {
     return ($members->ok) ? map { $self->shard($_) } @{$members->object} : @empty;
 }
 
-sub configservers {
+sub configsvrs {
     my ($self) = @_;
-    return $self->servers('configservers');
+    return $self->servers('configsvrs');
 }
 
 sub routers {

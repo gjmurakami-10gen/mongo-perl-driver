@@ -255,7 +255,7 @@ my $sharded_configuration = {
     }
 };
 
-subtest 'Cluster/ShardedCluster with host shards, configservers, routers' => sub {
+subtest 'Cluster/ShardedCluster with host shards, configsvrs, routers' => sub {
     my $service = MongoDBTest::Orchestration::Service->new;
     my $cluster = $service->configure($sharded_configuration);
     ok($cluster->isa('MongoDBTest::Orchestration::ShardedCluster'));
@@ -279,7 +279,7 @@ subtest 'Cluster/ShardedCluster with host shards, configservers, routers' => sub
         ok(exists($_->{object}->{procInfo}));
     }
 
-    @servers = $cluster->configservers;
+    @servers = $cluster->configsvrs;
     is(scalar(@servers), 1);
     foreach (@servers) {
         ok($_->isa('MongoDBTest::Orchestration::Server'));
@@ -333,7 +333,7 @@ my $sharded_replica_set_configuration = {
     }
 };
 
-subtest 'Cluster/ShardedCluster with replica-set shards, configservers, routers' => sub {
+subtest 'Cluster/ShardedCluster with replica-set shards' => sub {
     my $service = MongoDBTest::Orchestration::Service->new;
     my $cluster = $service->configure($sharded_replica_set_configuration);
     ok($cluster->isa('MongoDBTest::Orchestration::ShardedCluster'));
